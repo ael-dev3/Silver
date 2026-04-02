@@ -7321,83 +7321,96 @@ function mapMetadata(definition, metadata) {
     note: metadata.note
   };
 }
-async function fetchText(path) {
-  const response = await fetch(path, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`Failed to load ${path}`);
-  }
-  return response.text();
+function isValidCoverageEntry(definition, entry) {
+  return definition.intervals.includes(entry.interval) && Number.isFinite(entry.rows) && entry.rows > 0 && typeof entry.first_open_time_utc === "string" && entry.first_open_time_utc.length > 0 && typeof entry.last_close_time_utc === "string" && entry.last_close_time_utc.length > 0;
 }
-async function fetchJson(path) {
-  const response = await fetch(path, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`Failed to load ${path}`);
+function normalizeCoverage(definition, coverage) {
+  if (!coverage?.length) {
+    return [];
   }
-  return response.json();
+  const deduped = /* @__PURE__ */ new Map();
+  for (const entry of coverage) {
+    if (!isValidCoverageEntry(definition, entry)) {
+      continue;
+    }
+    deduped.set(entry.interval, {
+      interval: entry.interval,
+      rows: entry.rows,
+      first_open_time_utc: entry.first_open_time_utc,
+      last_close_time_utc: entry.last_close_time_utc
+    });
+  }
+  return definition.intervals.map((interval) => deduped.get(interval)).filter((entry) => Boolean(entry));
 }
 var DataRepository;
 var init_dataRepository = __esm({
   "src/workbench/dataRepository.ts"() {
     "use strict";
     DataRepository = class {
-      constructor() {
+      constructor(fetcher = fetch) {
+        this.fetcher = fetcher;
         this.overviewCache = /* @__PURE__ */ new Map();
         this.datasetCache = /* @__PURE__ */ new Map();
       }
       async loadOverview(definition) {
-        const cached = this.overviewCache.get(definition.id);
-        if (cached) {
-          return cached;
-        }
-        const promise = this.buildOverview(definition);
-        this.overviewCache.set(definition.id, promise);
-        return promise;
+        return this.loadCached(
+          this.overviewCache,
+          definition.id,
+          () => this.buildOverview(definition)
+        );
       }
       async loadDataset(definition, interval) {
         if (!definition.intervals.includes(interval)) {
           throw new Error(`${definition.label} does not support ${interval}`);
         }
         const cacheKey = `${definition.id}:${interval}`;
-        const cached = this.datasetCache.get(cacheKey);
-        if (cached) {
-          return cached;
-        }
-        const promise = this.buildDataset(definition, interval);
-        this.datasetCache.set(cacheKey, promise);
-        return promise;
+        return this.loadCached(
+          this.datasetCache,
+          cacheKey,
+          () => this.buildDataset(definition, interval)
+        );
       }
       async buildOverview(definition) {
+        let metadata = null;
         if (definition.metadataPath) {
-          const metadata = await fetchJson(definition.metadataPath);
-          const coverage2 = (metadata.coverage ?? []).map((entry) => ({
-            interval: entry.interval,
-            rows: entry.rows,
-            first_open_time_utc: entry.first_open_time_utc,
-            last_close_time_utc: entry.last_close_time_utc
-          }));
-          return {
-            definition,
-            coverage: coverage2,
-            meta: mapMetadata(definition, metadata)
-          };
+          try {
+            metadata = await this.fetchJson(definition.metadataPath);
+          } catch {
+            metadata = null;
+          }
         }
-        const coverage = await Promise.all(
-          definition.intervals.map(async (interval) => {
-            const dataset = await this.loadDataset(definition, interval);
-            return dataset.coverage;
-          })
+        const coverageByInterval = new Map(
+          normalizeCoverage(definition, metadata?.coverage).map((entry) => [entry.interval, entry])
         );
+        const missingIntervals = definition.intervals.filter(
+          (interval) => !coverageByInterval.has(interval)
+        );
+        if (missingIntervals.length) {
+          const derivedCoverage = await Promise.all(
+            missingIntervals.map(async (interval) => {
+              const dataset = await this.loadDataset(definition, interval);
+              return dataset.coverage;
+            })
+          );
+          for (const entry of derivedCoverage) {
+            coverageByInterval.set(entry.interval, entry);
+          }
+        }
+        const coverage = definition.intervals.map((interval) => coverageByInterval.get(interval)).filter((entry) => Boolean(entry));
+        if (!coverage.length) {
+          throw new Error(`No coverage available for ${definition.label}`);
+        }
         return {
           definition,
           coverage,
-          meta: {
+          meta: metadata ? mapMetadata(definition, metadata) : {
             sourceLabel: definition.source,
             displayName: definition.market
           }
         };
       }
       async buildDataset(definition, interval) {
-        const csvText = await fetchText(definition.csvPath(interval));
+        const csvText = await this.fetchText(definition.csvPath(interval));
         const candles = parseCsv(csvText);
         return {
           definition,
@@ -7405,6 +7418,32 @@ var init_dataRepository = __esm({
           candles,
           coverage: buildCoverage(interval, candles)
         };
+      }
+      loadCached(cache, key, loader) {
+        const cached = cache.get(key);
+        if (cached) {
+          return cached;
+        }
+        const promise = loader().catch((error) => {
+          cache.delete(key);
+          throw error;
+        });
+        cache.set(key, promise);
+        return promise;
+      }
+      async fetchText(path) {
+        const response = await this.fetcher(path, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`Failed to load ${path}`);
+        }
+        return response.text();
+      }
+      async fetchJson(path) {
+        const response = await this.fetcher(path, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`Failed to load ${path}`);
+        }
+        return response.json();
       }
     };
   }

@@ -27,6 +27,14 @@ interface RawMetadata {
   coverage?: RawMetadataCoverage[];
 }
 
+interface FetchResponseLike {
+  ok: boolean;
+  text(): Promise<string>;
+  json(): Promise<unknown>;
+}
+
+type FetchLike = (path: string, init?: RequestInit) => Promise<FetchResponseLike>;
+
 function parseCsv(text: string): CandleRow[] {
   const lines = text.trim().split(/\r?\n/);
   if (lines.length <= 1) {
@@ -91,35 +99,60 @@ function mapMetadata(definition: DatasetDefinition, metadata: RawMetadata): Data
   };
 }
 
-async function fetchText(path: string): Promise<string> {
-  const response = await fetch(path, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`Failed to load ${path}`);
-  }
-  return response.text();
+function isValidCoverageEntry(
+  definition: DatasetDefinition,
+  entry: RawMetadataCoverage,
+): entry is CoverageEntry {
+  return (
+    definition.intervals.includes(entry.interval) &&
+    Number.isFinite(entry.rows) &&
+    entry.rows > 0 &&
+    typeof entry.first_open_time_utc === "string" &&
+    entry.first_open_time_utc.length > 0 &&
+    typeof entry.last_close_time_utc === "string" &&
+    entry.last_close_time_utc.length > 0
+  );
 }
 
-async function fetchJson<T>(path: string): Promise<T> {
-  const response = await fetch(path, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`Failed to load ${path}`);
+function normalizeCoverage(
+  definition: DatasetDefinition,
+  coverage: RawMetadataCoverage[] | undefined,
+): CoverageEntry[] {
+  if (!coverage?.length) {
+    return [];
   }
-  return response.json() as Promise<T>;
+
+  const deduped = new Map<Interval, CoverageEntry>();
+  for (const entry of coverage) {
+    if (!isValidCoverageEntry(definition, entry)) {
+      continue;
+    }
+
+    deduped.set(entry.interval, {
+      interval: entry.interval,
+      rows: entry.rows,
+      first_open_time_utc: entry.first_open_time_utc,
+      last_close_time_utc: entry.last_close_time_utc,
+    });
+  }
+
+  return definition.intervals
+    .map((interval) => deduped.get(interval))
+    .filter((entry): entry is CoverageEntry => Boolean(entry));
 }
 
 export class DataRepository {
+  constructor(private readonly fetcher: FetchLike = fetch) {}
+
   private readonly overviewCache = new Map<string, Promise<DatasetOverview>>();
   private readonly datasetCache = new Map<string, Promise<LoadedDataset>>();
 
   async loadOverview(definition: DatasetDefinition): Promise<DatasetOverview> {
-    const cached = this.overviewCache.get(definition.id);
-    if (cached) {
-      return cached;
-    }
-
-    const promise = this.buildOverview(definition);
-    this.overviewCache.set(definition.id, promise);
-    return promise;
+    return this.loadCached(
+      this.overviewCache,
+      definition.id,
+      () => this.buildOverview(definition),
+    );
   }
 
   async loadDataset(definition: DatasetDefinition, interval: Interval): Promise<LoadedDataset> {
@@ -128,47 +161,60 @@ export class DataRepository {
     }
 
     const cacheKey = `${definition.id}:${interval}`;
-    const cached = this.datasetCache.get(cacheKey);
-    if (cached) {
-      return cached;
-    }
-
-    const promise = this.buildDataset(definition, interval);
-    this.datasetCache.set(cacheKey, promise);
-    return promise;
+    return this.loadCached(
+      this.datasetCache,
+      cacheKey,
+      () => this.buildDataset(definition, interval),
+    );
   }
 
   private async buildOverview(definition: DatasetDefinition): Promise<DatasetOverview> {
+    let metadata: RawMetadata | null = null;
     if (definition.metadataPath) {
-      const metadata = await fetchJson<RawMetadata>(definition.metadataPath);
-      const coverage = (metadata.coverage ?? []).map((entry) => ({
-        interval: entry.interval,
-        rows: entry.rows,
-        first_open_time_utc: entry.first_open_time_utc,
-        last_close_time_utc: entry.last_close_time_utc,
-      }));
-
-      return {
-        definition,
-        coverage,
-        meta: mapMetadata(definition, metadata),
-      };
+      try {
+        metadata = await this.fetchJson<RawMetadata>(definition.metadataPath);
+      } catch {
+        metadata = null;
+      }
     }
 
-    const coverage = await Promise.all(
-      definition.intervals.map(async (interval) => {
-        const dataset = await this.loadDataset(definition, interval);
-        return dataset.coverage;
-      }),
+    const coverageByInterval = new Map<Interval, CoverageEntry>(
+      normalizeCoverage(definition, metadata?.coverage).map((entry) => [entry.interval, entry] as const),
     );
+    const missingIntervals = definition.intervals.filter(
+      (interval) => !coverageByInterval.has(interval),
+    );
+
+    if (missingIntervals.length) {
+      const derivedCoverage = await Promise.all(
+        missingIntervals.map(async (interval) => {
+          const dataset = await this.loadDataset(definition, interval);
+          return dataset.coverage;
+        }),
+      );
+
+      for (const entry of derivedCoverage) {
+        coverageByInterval.set(entry.interval, entry);
+      }
+    }
+
+    const coverage = definition.intervals
+      .map((interval) => coverageByInterval.get(interval))
+      .filter((entry): entry is CoverageEntry => Boolean(entry));
+
+    if (!coverage.length) {
+      throw new Error(`No coverage available for ${definition.label}`);
+    }
 
     return {
       definition,
       coverage,
-      meta: {
-        sourceLabel: definition.source,
-        displayName: definition.market,
-      },
+      meta: metadata
+        ? mapMetadata(definition, metadata)
+        : {
+            sourceLabel: definition.source,
+            displayName: definition.market,
+          },
     };
   }
 
@@ -176,7 +222,7 @@ export class DataRepository {
     definition: DatasetDefinition,
     interval: Interval,
   ): Promise<LoadedDataset> {
-    const csvText = await fetchText(definition.csvPath(interval));
+    const csvText = await this.fetchText(definition.csvPath(interval));
     const candles = parseCsv(csvText);
 
     return {
@@ -185,5 +231,39 @@ export class DataRepository {
       candles,
       coverage: buildCoverage(interval, candles),
     };
+  }
+
+  private loadCached<T>(
+    cache: Map<string, Promise<T>>,
+    key: string,
+    loader: () => Promise<T>,
+  ): Promise<T> {
+    const cached = cache.get(key);
+    if (cached) {
+      return cached;
+    }
+
+    const promise = loader().catch((error) => {
+      cache.delete(key);
+      throw error;
+    });
+    cache.set(key, promise);
+    return promise;
+  }
+
+  private async fetchText(path: string): Promise<string> {
+    const response = await this.fetcher(path, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(`Failed to load ${path}`);
+    }
+    return response.text();
+  }
+
+  private async fetchJson<T>(path: string): Promise<T> {
+    const response = await this.fetcher(path, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(`Failed to load ${path}`);
+    }
+    return response.json() as Promise<T>;
   }
 }
