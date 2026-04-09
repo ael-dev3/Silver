@@ -39,6 +39,18 @@ function calculateMaxDrawdown(equityCurve: number[]): number {
   return maxDrawdown * 100;
 }
 
+function markToMarketEquity(
+  equityAtEntry: number,
+  entryPrice: number,
+  currentPrice: number,
+): number {
+  if (entryPrice <= 0) {
+    return equityAtEntry;
+  }
+
+  return equityAtEntry * (currentPrice / entryPrice);
+}
+
 function runEmaCross(candles: CandleRow[]): BacktestResult | null {
   const fast = computeEma(candles, 20);
   const slow = computeEma(candles, 50);
@@ -48,7 +60,8 @@ function runEmaCross(candles: CandleRow[]): BacktestResult | null {
   let inPosition = false;
   let entryPrice = 0;
   let entryTime = "";
-  let equity = 1;
+  let realizedEquity = 1;
+  let equityAtEntry = 1;
 
   for (let index = 1; index < candles.length; index += 1) {
     if (
@@ -67,30 +80,44 @@ function runEmaCross(candles: CandleRow[]): BacktestResult | null {
       inPosition = true;
       entryPrice = candles[index].close;
       entryTime = candles[index].close_time_utc;
+      equityAtEntry = realizedEquity;
+      equityCurve.push(realizedEquity);
       continue;
     }
 
-    if (inPosition && crossedDown) {
-      const exitPrice = candles[index].close;
-      const tradeReturn = (exitPrice - entryPrice) / entryPrice;
-      equity *= 1 + tradeReturn;
-      equityCurve.push(equity);
-      trades.push({
-        entryTime,
-        exitTime: candles[index].close_time_utc,
+    if (inPosition) {
+      // Track marked-to-market equity so drawdown reflects open-position risk.
+      const markedEquity = markToMarketEquity(
+        equityAtEntry,
         entryPrice,
-        exitPrice,
-        returnPct: tradeReturn * 100,
-      });
-      inPosition = false;
+        candles[index].close,
+      );
+      equityCurve.push(markedEquity);
+
+      if (crossedDown) {
+        const exitPrice = candles[index].close;
+        const tradeReturn = (exitPrice - entryPrice) / entryPrice;
+        realizedEquity = markedEquity;
+        trades.push({
+          entryTime,
+          exitTime: candles[index].close_time_utc,
+          entryPrice,
+          exitPrice,
+          returnPct: tradeReturn * 100,
+        });
+        inPosition = false;
+      }
+
+      continue;
     }
+
+    equityCurve.push(realizedEquity);
   }
 
   if (inPosition) {
     const last = candles[candles.length - 1];
     const tradeReturn = (last.close - entryPrice) / entryPrice;
-    equity *= 1 + tradeReturn;
-    equityCurve.push(equity);
+    realizedEquity = markToMarketEquity(equityAtEntry, entryPrice, last.close);
     trades.push({
       entryTime,
       exitTime: last.close_time_utc,
@@ -110,7 +137,7 @@ function runEmaCross(candles: CandleRow[]): BacktestResult | null {
     trades,
     tradeCount: trades.length,
     winRate: (winners / trades.length) * 100,
-    totalReturnPct: (equity - 1) * 100,
+    totalReturnPct: (realizedEquity - 1) * 100,
     maxDrawdownPct: calculateMaxDrawdown(equityCurve),
   };
 }
