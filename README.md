@@ -85,6 +85,7 @@ Important caveats:
 - the schema matches the Hyperliquid CSV layout, but the market and volume construction are different
 - `trade_count` is set to `0` because the Dukascopy daily export used here does not expose per-bar trade counts
 - weekly bars are aggregated from daily candles, using Monday-based calendar weeks and partial weeks at the edges when needed
+- the weekly builder normalizes rare upstream daily OHLC envelope anomalies from Dukascopy so checked-in weekly bars remain internally consistent
 
 ## Candle schema
 
@@ -154,6 +155,14 @@ Run the strict TypeScript check:
 ```bash
 npm run typecheck
 ```
+
+Run the full validation suite:
+
+```bash
+npm test
+```
+
+This runs TypeScript checks, Vitest, Python dataset-integrity tests, and the workbench build.
 
 ## Repo layout
 

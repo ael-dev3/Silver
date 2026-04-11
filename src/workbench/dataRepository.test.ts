@@ -136,6 +136,45 @@ describe("DataRepository", () => {
       },
     ]);
   });
+
+  it("rejects malformed candles whose close falls outside the reported range", async () => {
+    const repository = new DataRepository(async (path) => {
+      if (path === "/silver_1h.csv") {
+        return response({
+          text: [
+            "open_time,close_time,open_time_utc,close_time_utc,symbol,interval,open,high,low,close,volume,trade_count",
+            "1740787200000,1740790799000,2026-03-01T00:00:00.000Z,2026-03-01T00:59:59.000Z,SLV/USDC,1h,31.100,31.200,31.000,30.900,100,2",
+          ].join("\n"),
+        });
+      }
+
+      throw new Error(`Unexpected path: ${path}`);
+    });
+
+    await expect(repository.loadDataset(makeDefinition(), "1h")).rejects.toThrow(
+      "Invalid OHLC range at line 2",
+    );
+  });
+
+  it("rejects descending timestamps instead of silently reordering candles", async () => {
+    const repository = new DataRepository(async (path) => {
+      if (path === "/silver_1h.csv") {
+        return response({
+          text: [
+            "open_time,close_time,open_time_utc,close_time_utc,symbol,interval,open,high,low,close,volume,trade_count",
+            "1740790800000,1740794399000,2026-03-01T01:00:00.000Z,2026-03-01T01:59:59.000Z,SLV/USDC,1h,31.150,31.250,31.100,31.225,110,3",
+            "1740787200000,1740790799000,2026-03-01T00:00:00.000Z,2026-03-01T00:59:59.000Z,SLV/USDC,1h,31.100,31.200,31.000,31.150,100,2",
+          ].join("\n"),
+        });
+      }
+
+      throw new Error(`Unexpected path: ${path}`);
+    });
+
+    await expect(repository.loadDataset(makeDefinition(), "1h")).rejects.toThrow(
+      "Non-ascending open_time at line 3",
+    );
+  });
 });
 
 function makeDefinition(

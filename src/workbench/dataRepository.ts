@@ -7,6 +7,7 @@ import type {
   Interval,
   LoadedDataset,
 } from "./types";
+import { parseCandleCsv } from "./candleValidation";
 
 interface RawMetadataCoverage {
   interval: Interval;
@@ -34,43 +35,6 @@ interface FetchResponseLike {
 }
 
 type FetchLike = (path: string, init?: RequestInit) => Promise<FetchResponseLike>;
-
-function parseCsv(text: string): CandleRow[] {
-  const lines = text.trim().split(/\r?\n/);
-  if (lines.length <= 1) {
-    return [];
-  }
-
-  const candles: CandleRow[] = [];
-  for (let index = 1; index < lines.length; index += 1) {
-    const line = lines[index]?.trim();
-    if (!line) {
-      continue;
-    }
-
-    const parts = line.split(",");
-    if (parts.length < 12) {
-      throw new Error(`Malformed candle row at line ${index + 1}`);
-    }
-
-    candles.push({
-      open_time: Number(parts[0]),
-      close_time: Number(parts[1]),
-      open_time_utc: parts[2],
-      close_time_utc: parts[3],
-      symbol: parts[4],
-      interval: parts[5] as Interval,
-      open: Number(parts[6]),
-      high: Number(parts[7]),
-      low: Number(parts[8]),
-      close: Number(parts[9]),
-      volume: Number(parts[10]),
-      trade_count: Number(parts[11]),
-    });
-  }
-
-  return candles.sort((left, right) => left.open_time - right.open_time);
-}
 
 function buildCoverage(interval: Interval, candles: CandleRow[]): CoverageEntry {
   const first = candles[0];
@@ -223,7 +187,10 @@ export class DataRepository {
     interval: Interval,
   ): Promise<LoadedDataset> {
     const csvText = await this.fetchText(definition.csvPath(interval));
-    const candles = parseCsv(csvText);
+    const candles = parseCandleCsv(csvText, {
+      expectedInterval: interval,
+      datasetLabel: `${definition.label} ${interval}`,
+    });
 
     return {
       definition,
