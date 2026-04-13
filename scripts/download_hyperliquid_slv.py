@@ -21,7 +21,11 @@ def post_info(payload: dict) -> object:
 
 
 def iso_utc(timestamp_ms: int) -> str:
-    return datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc).isoformat()
+    return (
+        datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
+    )
 
 
 def discover_slv_pair() -> dict:
@@ -136,7 +140,7 @@ def main() -> None:
     metadata = {
         "source": "Hyperliquid official API",
         "api_url": API_URL,
-        "downloaded_at_utc": datetime.now(tz=timezone.utc).isoformat(),
+        "downloaded_at_utc": datetime.now(tz=timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
         "pair": pair,
         "note": (
             "Hyperliquid candleSnapshot returns only the most recent candles for an interval. "

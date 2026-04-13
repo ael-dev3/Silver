@@ -19,7 +19,11 @@ DAY_MS = 86_400_000
 
 
 def iso_utc(timestamp_ms: int) -> str:
-    return datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc).isoformat()
+    return (
+        datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
+    )
 
 
 def day_end_timestamp(timestamp_ms: int) -> int:

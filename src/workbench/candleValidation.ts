@@ -1,4 +1,5 @@
 import type { CandleRow, Interval } from "./types";
+import { assertUtcTimestampTextForMs } from "./timestampValidation";
 
 const EXPECTED_HEADER = [
   "open_time",
@@ -96,8 +97,8 @@ export function parseCandleCsv(
     const row: CandleRow = {
       open_time: parseInteger(parts[0], "open_time", lineNumber),
       close_time: parseInteger(parts[1], "close_time", lineNumber),
-      open_time_utc: parts[2],
-      close_time_utc: parts[3],
+      open_time_utc: parts[2]?.trim() ?? "",
+      close_time_utc: parts[3]?.trim() ?? "",
       symbol: parts[4]?.trim() ?? "",
       interval: intervalValue as Interval,
       open: parseFiniteNumber(parts[6], "open", lineNumber),
@@ -108,10 +109,6 @@ export function parseCandleCsv(
       trade_count: parseInteger(parts[11], "trade_count", lineNumber),
     };
 
-    if (!row.open_time_utc || !row.close_time_utc) {
-      throw new Error(`Missing candle timestamp text at line ${lineNumber}`);
-    }
-
     if (!row.symbol) {
       throw new Error(`Missing symbol at line ${lineNumber}`);
     }
@@ -119,6 +116,21 @@ export function parseCandleCsv(
     if (options.expectedInterval && row.interval !== options.expectedInterval) {
       throw new Error(`Unexpected interval at line ${lineNumber}`);
     }
+
+    assertUtcTimestampTextForMs(
+      row.open_time_utc,
+      row.open_time,
+      "open_time_utc",
+      "open_time",
+      lineNumber,
+    );
+    assertUtcTimestampTextForMs(
+      row.close_time_utc,
+      row.close_time,
+      "close_time_utc",
+      "close_time",
+      lineNumber,
+    );
 
     if (previousOpenTime !== null && row.open_time <= previousOpenTime) {
       throw new Error(`Non-ascending open_time at line ${lineNumber}`);

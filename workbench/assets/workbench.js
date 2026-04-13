@@ -7265,6 +7265,38 @@ var init_chartController = __esm({
   }
 });
 
+// src/workbench/timestampValidation.ts
+function parseUtcTimestampText(value) {
+  const trimmed = value.trim();
+  if (!trimmed || !UTC_ZERO_OFFSET_SUFFIX.test(trimmed)) {
+    return null;
+  }
+  const parsed = Date.parse(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+function isValidUtcTimestampText(value) {
+  return parseUtcTimestampText(value) !== null;
+}
+function isUtcTimestampTextForMs(value, expectedMs) {
+  return parseUtcTimestampText(value) === expectedMs;
+}
+function assertUtcTimestampTextForMs(value, expectedMs, fieldName, epochFieldName, lineNumber) {
+  const parsed = parseUtcTimestampText(value);
+  if (parsed === null) {
+    throw new Error(`Invalid ${fieldName} at line ${lineNumber}`);
+  }
+  if (parsed !== expectedMs) {
+    throw new Error(`${fieldName} does not match ${epochFieldName} at line ${lineNumber}`);
+  }
+}
+var UTC_ZERO_OFFSET_SUFFIX;
+var init_timestampValidation = __esm({
+  "src/workbench/timestampValidation.ts"() {
+    "use strict";
+    UTC_ZERO_OFFSET_SUFFIX = /(Z|[+-]00:00)$/i;
+  }
+});
+
 // src/workbench/candleValidation.ts
 function parseFiniteNumber(rawValue, fieldName, lineNumber) {
   const value = Number(rawValue);
@@ -7325,8 +7357,8 @@ function parseCandleCsv(text, options = {}) {
     const row = {
       open_time: parseInteger(parts[0], "open_time", lineNumber),
       close_time: parseInteger(parts[1], "close_time", lineNumber),
-      open_time_utc: parts[2],
-      close_time_utc: parts[3],
+      open_time_utc: parts[2]?.trim() ?? "",
+      close_time_utc: parts[3]?.trim() ?? "",
       symbol: parts[4]?.trim() ?? "",
       interval: intervalValue,
       open: parseFiniteNumber(parts[6], "open", lineNumber),
@@ -7336,15 +7368,26 @@ function parseCandleCsv(text, options = {}) {
       volume: parseFiniteNumber(parts[10], "volume", lineNumber),
       trade_count: parseInteger(parts[11], "trade_count", lineNumber)
     };
-    if (!row.open_time_utc || !row.close_time_utc) {
-      throw new Error(`Missing candle timestamp text at line ${lineNumber}`);
-    }
     if (!row.symbol) {
       throw new Error(`Missing symbol at line ${lineNumber}`);
     }
     if (options.expectedInterval && row.interval !== options.expectedInterval) {
       throw new Error(`Unexpected interval at line ${lineNumber}`);
     }
+    assertUtcTimestampTextForMs(
+      row.open_time_utc,
+      row.open_time,
+      "open_time_utc",
+      "open_time",
+      lineNumber
+    );
+    assertUtcTimestampTextForMs(
+      row.close_time_utc,
+      row.close_time,
+      "close_time_utc",
+      "close_time",
+      lineNumber
+    );
     if (previousOpenTime !== null && row.open_time <= previousOpenTime) {
       throw new Error(`Non-ascending open_time at line ${lineNumber}`);
     }
@@ -7358,6 +7401,7 @@ var EXPECTED_HEADER, VALID_INTERVALS;
 var init_candleValidation = __esm({
   "src/workbench/candleValidation.ts"() {
     "use strict";
+    init_timestampValidation();
     EXPECTED_HEADER = [
       "open_time",
       "close_time",
@@ -7400,8 +7444,20 @@ function mapMetadata(definition, metadata) {
     note: metadata.note
   };
 }
+function isPositiveSafeInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+function hasValidCoverageTimestamp(rawValue, expectedMs) {
+  if (typeof rawValue !== "string" || rawValue.trim().length === 0) {
+    return false;
+  }
+  if (expectedMs === void 0) {
+    return isValidUtcTimestampText(rawValue);
+  }
+  return typeof expectedMs === "number" && Number.isSafeInteger(expectedMs) && isUtcTimestampTextForMs(rawValue, expectedMs);
+}
 function isValidCoverageEntry(definition, entry) {
-  return definition.intervals.includes(entry.interval) && Number.isFinite(entry.rows) && entry.rows > 0 && typeof entry.first_open_time_utc === "string" && entry.first_open_time_utc.length > 0 && typeof entry.last_close_time_utc === "string" && entry.last_close_time_utc.length > 0;
+  return definition.intervals.includes(entry.interval) && isPositiveSafeInteger(entry.rows) && hasValidCoverageTimestamp(entry.first_open_time_utc, entry.first_open_time) && hasValidCoverageTimestamp(entry.last_close_time_utc, entry.last_close_time);
 }
 function normalizeCoverage(definition, coverage) {
   if (!coverage?.length) {
@@ -7415,8 +7471,8 @@ function normalizeCoverage(definition, coverage) {
     deduped.set(entry.interval, {
       interval: entry.interval,
       rows: entry.rows,
-      first_open_time_utc: entry.first_open_time_utc,
-      last_close_time_utc: entry.last_close_time_utc
+      first_open_time_utc: entry.first_open_time_utc.trim(),
+      last_close_time_utc: entry.last_close_time_utc.trim()
     });
   }
   return definition.intervals.map((interval) => deduped.get(interval)).filter((entry) => Boolean(entry));
@@ -7426,6 +7482,7 @@ var init_dataRepository = __esm({
   "src/workbench/dataRepository.ts"() {
     "use strict";
     init_candleValidation();
+    init_timestampValidation();
     DataRepository = class {
       constructor(fetcher = fetch) {
         this.fetcher = fetcher;

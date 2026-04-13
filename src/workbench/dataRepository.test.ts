@@ -30,7 +30,7 @@ describe("DataRepository", () => {
       interval: "1h",
       rows: 2,
       first_open_time_utc: "2026-03-01T00:00:00.000Z",
-      last_close_time_utc: "2026-03-01T01:59:59.000Z",
+      last_close_time_utc: "2026-03-01T01:59:59.999Z",
     });
   });
 
@@ -68,13 +68,13 @@ describe("DataRepository", () => {
         interval: "1h",
         rows: 2,
         first_open_time_utc: "2026-03-01T00:00:00.000Z",
-        last_close_time_utc: "2026-03-01T01:59:59.000Z",
+        last_close_time_utc: "2026-03-01T01:59:59.999Z",
       },
       {
         interval: "1d",
         rows: 2,
         first_open_time_utc: "2026-03-01T00:00:00.000Z",
-        last_close_time_utc: "2026-03-02T23:59:59.000Z",
+        last_close_time_utc: "2026-03-02T23:59:59.999Z",
       },
     ]);
   });
@@ -91,7 +91,7 @@ describe("DataRepository", () => {
                 interval: "1d",
                 rows: 2,
                 first_open_time_utc: "2026-03-01T00:00:00.000Z",
-                last_close_time_utc: "2026-03-02T23:59:59.000Z",
+                last_close_time_utc: "2026-03-02T23:59:59.999Z",
               },
             ],
           },
@@ -126,13 +126,58 @@ describe("DataRepository", () => {
         interval: "1h",
         rows: 2,
         first_open_time_utc: "2026-03-01T00:00:00.000Z",
-        last_close_time_utc: "2026-03-01T01:59:59.000Z",
+        last_close_time_utc: "2026-03-01T01:59:59.999Z",
       },
       {
         interval: "1d",
         rows: 2,
         first_open_time_utc: "2026-03-01T00:00:00.000Z",
-        last_close_time_utc: "2026-03-02T23:59:59.000Z",
+        last_close_time_utc: "2026-03-02T23:59:59.999Z",
+      },
+    ]);
+  });
+
+  it("falls back to CSV-derived coverage when metadata timestamps do not match their numeric fields", async () => {
+    const fetcher = vi.fn(async (path: string) => {
+      if (path === "/meta.json") {
+        return response({
+          json: {
+            source: "Hyperliquid",
+            coverage: [
+              {
+                interval: "1d",
+                rows: 2,
+                first_open_time: 1772323200000,
+                first_open_time_utc: "2026-03-02T00:00:00.000Z",
+                last_close_time: 1772495999999,
+                last_close_time_utc: "2026-03-03T23:59:59.999Z",
+              },
+            ],
+          },
+        });
+      }
+
+      if (path === "/silver_1d.csv") {
+        return response({ text: buildCsv("1d") });
+      }
+
+      throw new Error(`Unexpected path: ${path}`);
+    });
+    const repository = new DataRepository(fetcher);
+
+    const overview = await repository.loadOverview(
+      makeDefinition({ intervals: ["1d"], defaultInterval: "1d" }),
+    );
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenNthCalledWith(1, "/meta.json", { cache: "no-store" });
+    expect(fetcher).toHaveBeenNthCalledWith(2, "/silver_1d.csv", { cache: "no-store" });
+    expect(overview.coverage).toEqual([
+      {
+        interval: "1d",
+        rows: 2,
+        first_open_time_utc: "2026-03-01T00:00:00.000Z",
+        last_close_time_utc: "2026-03-02T23:59:59.999Z",
       },
     ]);
   });
@@ -143,7 +188,7 @@ describe("DataRepository", () => {
         return response({
           text: [
             "open_time,close_time,open_time_utc,close_time_utc,symbol,interval,open,high,low,close,volume,trade_count",
-            "1740787200000,1740790799000,2026-03-01T00:00:00.000Z,2026-03-01T00:59:59.000Z,SLV/USDC,1h,31.100,31.200,31.000,30.900,100,2",
+            "1772323200000,1772326799999,2026-03-01T00:00:00.000Z,2026-03-01T00:59:59.999Z,SLV/USDC,1h,31.100,31.200,31.000,30.900,100,2",
           ].join("\n"),
         });
       }
@@ -162,8 +207,8 @@ describe("DataRepository", () => {
         return response({
           text: [
             "open_time,close_time,open_time_utc,close_time_utc,symbol,interval,open,high,low,close,volume,trade_count",
-            "1740790800000,1740794399000,2026-03-01T01:00:00.000Z,2026-03-01T01:59:59.000Z,SLV/USDC,1h,31.150,31.250,31.100,31.225,110,3",
-            "1740787200000,1740790799000,2026-03-01T00:00:00.000Z,2026-03-01T00:59:59.000Z,SLV/USDC,1h,31.100,31.200,31.000,31.150,100,2",
+            "1772326800000,1772330399999,2026-03-01T01:00:00.000Z,2026-03-01T01:59:59.999Z,SLV/USDC,1h,31.150,31.250,31.100,31.225,110,3",
+            "1772323200000,1772326799999,2026-03-01T00:00:00.000Z,2026-03-01T00:59:59.999Z,SLV/USDC,1h,31.100,31.200,31.000,31.150,100,2",
           ].join("\n"),
         });
       }
@@ -173,6 +218,25 @@ describe("DataRepository", () => {
 
     await expect(repository.loadDataset(makeDefinition(), "1h")).rejects.toThrow(
       "Non-ascending open_time at line 3",
+    );
+  });
+
+  it("rejects candle rows whose UTC text does not match the numeric close_time", async () => {
+    const repository = new DataRepository(async (path) => {
+      if (path === "/silver_1h.csv") {
+        return response({
+          text: [
+            "open_time,close_time,open_time_utc,close_time_utc,symbol,interval,open,high,low,close,volume,trade_count",
+            "1772323200000,1772326799999,2026-03-01T00:00:00.000Z,2026-03-01T01:59:59.999Z,SLV/USDC,1h,31.100,31.200,31.000,31.150,100,2",
+          ].join("\n"),
+        });
+      }
+
+      throw new Error(`Unexpected path: ${path}`);
+    });
+
+    await expect(repository.loadDataset(makeDefinition(), "1h")).rejects.toThrow(
+      "close_time_utc does not match close_time at line 2",
     );
   });
 });
@@ -199,15 +263,15 @@ function buildCsv(interval: Interval): string {
   if (interval === "1d") {
     return [
       "open_time,close_time,open_time_utc,close_time_utc,symbol,interval,open,high,low,close,volume,trade_count",
-      "1740787200000,1740873599000,2026-03-01T00:00:00.000Z,2026-03-01T23:59:59.000Z,SLV/USDC,1d,31.100,31.400,31.000,31.250,1000,10",
-      "1740873600000,1740959999000,2026-03-02T00:00:00.000Z,2026-03-02T23:59:59.000Z,SLV/USDC,1d,31.250,31.600,31.200,31.500,1200,12",
+      "1772323200000,1772409599999,2026-03-01T00:00:00.000Z,2026-03-01T23:59:59.999Z,SLV/USDC,1d,31.100,31.400,31.000,31.250,1000,10",
+      "1772409600000,1772495999999,2026-03-02T00:00:00.000Z,2026-03-02T23:59:59.999Z,SLV/USDC,1d,31.250,31.600,31.200,31.500,1200,12",
     ].join("\n");
   }
 
   return [
     "open_time,close_time,open_time_utc,close_time_utc,symbol,interval,open,high,low,close,volume,trade_count",
-    "1740787200000,1740790799000,2026-03-01T00:00:00.000Z,2026-03-01T00:59:59.000Z,SLV/USDC,1h,31.100,31.200,31.000,31.150,100,2",
-    "1740790800000,1740794399000,2026-03-01T01:00:00.000Z,2026-03-01T01:59:59.000Z,SLV/USDC,1h,31.150,31.250,31.100,31.225,110,3",
+    "1772323200000,1772326799999,2026-03-01T00:00:00.000Z,2026-03-01T00:59:59.999Z,SLV/USDC,1h,31.100,31.200,31.000,31.150,100,2",
+    "1772326800000,1772330399999,2026-03-01T01:00:00.000Z,2026-03-01T01:59:59.999Z,SLV/USDC,1h,31.150,31.250,31.100,31.225,110,3",
   ].join("\n");
 }
 

@@ -8,11 +8,14 @@ import type {
   LoadedDataset,
 } from "./types";
 import { parseCandleCsv } from "./candleValidation";
+import { isUtcTimestampTextForMs, isValidUtcTimestampText } from "./timestampValidation";
 
 interface RawMetadataCoverage {
   interval: Interval;
   rows: number;
+  first_open_time?: number;
   first_open_time_utc: string;
+  last_close_time?: number;
   last_close_time_utc: string;
 }
 
@@ -63,18 +66,35 @@ function mapMetadata(definition: DatasetDefinition, metadata: RawMetadata): Data
   };
 }
 
+function isPositiveSafeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+
+function hasValidCoverageTimestamp(rawValue: unknown, expectedMs: unknown): rawValue is string {
+  if (typeof rawValue !== "string" || rawValue.trim().length === 0) {
+    return false;
+  }
+
+  if (expectedMs === undefined) {
+    return isValidUtcTimestampText(rawValue);
+  }
+
+  return (
+    typeof expectedMs === "number" &&
+    Number.isSafeInteger(expectedMs) &&
+    isUtcTimestampTextForMs(rawValue, expectedMs)
+  );
+}
+
 function isValidCoverageEntry(
   definition: DatasetDefinition,
   entry: RawMetadataCoverage,
 ): entry is CoverageEntry {
   return (
     definition.intervals.includes(entry.interval) &&
-    Number.isFinite(entry.rows) &&
-    entry.rows > 0 &&
-    typeof entry.first_open_time_utc === "string" &&
-    entry.first_open_time_utc.length > 0 &&
-    typeof entry.last_close_time_utc === "string" &&
-    entry.last_close_time_utc.length > 0
+    isPositiveSafeInteger(entry.rows) &&
+    hasValidCoverageTimestamp(entry.first_open_time_utc, entry.first_open_time) &&
+    hasValidCoverageTimestamp(entry.last_close_time_utc, entry.last_close_time)
   );
 }
 
@@ -95,8 +115,8 @@ function normalizeCoverage(
     deduped.set(entry.interval, {
       interval: entry.interval,
       rows: entry.rows,
-      first_open_time_utc: entry.first_open_time_utc,
-      last_close_time_utc: entry.last_close_time_utc,
+      first_open_time_utc: entry.first_open_time_utc.trim(),
+      last_close_time_utc: entry.last_close_time_utc.trim(),
     });
   }
 

@@ -1,6 +1,7 @@
 import csv
 import json
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 
 
@@ -30,6 +31,14 @@ def read_candle_csv(path: Path) -> tuple[list[str], list[dict[str, str]]]:
     return list(reader.fieldnames or []), rows
 
 
+def parse_utc_text_to_epoch_ms(raw_value: str) -> int:
+    normalized = raw_value.replace("Z", "+00:00")
+    parsed = datetime.fromisoformat(normalized)
+    if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
+        raise AssertionError(f"Timestamp is not explicit UTC: {raw_value}")
+    return int(parsed.timestamp() * 1000)
+
+
 class DatasetIntegrityTests(unittest.TestCase):
     def test_checked_in_candle_files_are_valid_and_monotonic(self) -> None:
         csv_paths = sorted(DATA_DIR.rglob("*.csv"))
@@ -53,10 +62,14 @@ class DatasetIntegrityTests(unittest.TestCase):
                     close_price = float(row["close"])
                     volume = float(row["volume"])
                     trade_count = int(row["trade_count"])
+                    open_time_utc_ms = parse_utc_text_to_epoch_ms(row["open_time_utc"])
+                    close_time_utc_ms = parse_utc_text_to_epoch_ms(row["close_time_utc"])
 
                     if previous_open_time is not None:
                         self.assertGreater(open_time, previous_open_time, f"{path.name} row {index} is not strictly ascending.")
                     self.assertGreater(close_time, open_time, f"{path.name} row {index} has an invalid close_time.")
+                    self.assertEqual(open_time_utc_ms, open_time, f"{path.name} row {index} open_time_utc drifted from open_time.")
+                    self.assertEqual(close_time_utc_ms, close_time, f"{path.name} row {index} close_time_utc drifted from close_time.")
                     self.assertLessEqual(low_price, min(open_price, close_price), f"{path.name} row {index} low does not envelope the candle body.")
                     self.assertGreaterEqual(high_price, max(open_price, close_price), f"{path.name} row {index} high does not envelope the candle body.")
                     self.assertGreaterEqual(high_price, low_price, f"{path.name} row {index} has high below low.")
@@ -75,10 +88,14 @@ class DatasetIntegrityTests(unittest.TestCase):
                 interval = path.stem.rsplit("_", maxsplit=1)[-1]
                 _, rows = read_candle_csv(path)
                 coverage = coverage_by_interval[interval]
+                first_open_time = int(rows[0]["open_time"])
+                last_close_time = int(rows[-1]["close_time"])
 
                 self.assertEqual(coverage["rows"], len(rows), f"{path.name} row count drifted from metadata.")
-                self.assertEqual(coverage["first_open_time_utc"], rows[0]["open_time_utc"], f"{path.name} first candle drifted from metadata.")
-                self.assertEqual(coverage["last_close_time_utc"], rows[-1]["close_time_utc"], f"{path.name} last candle drifted from metadata.")
+                self.assertEqual(coverage["first_open_time"], first_open_time, f"{path.name} first candle epoch drifted from metadata.")
+                self.assertEqual(coverage["last_close_time"], last_close_time, f"{path.name} last candle epoch drifted from metadata.")
+                self.assertEqual(parse_utc_text_to_epoch_ms(coverage["first_open_time_utc"]), coverage["first_open_time"], f"{path.name} metadata first_open_time_utc drifted from first_open_time.")
+                self.assertEqual(parse_utc_text_to_epoch_ms(coverage["last_close_time_utc"]), coverage["last_close_time"], f"{path.name} metadata last_close_time_utc drifted from last_close_time.")
 
 
 if __name__ == "__main__":
