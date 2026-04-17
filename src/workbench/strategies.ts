@@ -1,33 +1,5 @@
+import { calculateMovingAverageValues } from "./movingAverage";
 import type { BacktestResult, BacktestTrade, CandleRow, StrategyDefinition } from "./types";
-
-function computeEma(candles: CandleRow[], period: number): number[] {
-  const values = Array<number>(candles.length).fill(Number.NaN);
-  if (candles.length < period) {
-    return values;
-  }
-
-  const multiplier = 2 / (period + 1);
-  let rollingSum = 0;
-  let emaValue = 0;
-
-  for (let index = 0; index < candles.length; index += 1) {
-    const close = candles[index].close;
-    rollingSum += close;
-
-    if (index === period - 1) {
-      emaValue = rollingSum / period;
-      values[index] = emaValue;
-      continue;
-    }
-
-    if (index >= period) {
-      emaValue = close * multiplier + emaValue * (1 - multiplier);
-      values[index] = emaValue;
-    }
-  }
-
-  return values;
-}
 
 function calculateMaxDrawdown(equityCurve: number[]): number {
   let peak = equityCurve[0] ?? 1;
@@ -52,8 +24,8 @@ function markToMarketEquity(
 }
 
 function runEmaCross(candles: CandleRow[]): BacktestResult | null {
-  const fast = computeEma(candles, 20);
-  const slow = computeEma(candles, 50);
+  const fast = calculateMovingAverageValues(candles, 20, "ema");
+  const slow = calculateMovingAverageValues(candles, 50, "ema");
   const trades: BacktestTrade[] = [];
   const equityCurve: number[] = [1];
 

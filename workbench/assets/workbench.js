@@ -7637,89 +7637,29 @@ var init_format = __esm({
   }
 });
 
-// src/workbench/indicators.ts
-function buildMovingAverage(candles, period, mode) {
+// src/workbench/movingAverage.ts
+function createEmptyValues(length) {
+  return Array(length).fill(Number.NaN);
+}
+function calculateMovingAverageValues(candles, period, mode) {
+  const values = createEmptyValues(candles.length);
   if (candles.length < period) {
-    return [];
+    return values;
   }
-  const result = [];
-  let emaValue = 0;
   let rollingSum = 0;
-  const multiplier = 2 / (period + 1);
-  for (let index = 0; index < candles.length; index += 1) {
-    const close = candles[index].close;
-    rollingSum += close;
-    if (mode === "sma") {
+  if (mode === "sma") {
+    for (let index = 0; index < candles.length; index += 1) {
+      rollingSum += candles[index].close;
       if (index >= period) {
         rollingSum -= candles[index - period].close;
       }
       if (index >= period - 1) {
-        result.push({
-          time: candles[index].open_time / 1e3,
-          value: rollingSum / period
-        });
+        values[index] = rollingSum / period;
       }
-      continue;
     }
-    if (index === period - 1) {
-      emaValue = rollingSum / period;
-      result.push({
-        time: candles[index].open_time / 1e3,
-        value: emaValue
-      });
-      continue;
-    }
-    if (index >= period) {
-      emaValue = close * multiplier + emaValue * (1 - multiplier);
-      result.push({
-        time: candles[index].open_time / 1e3,
-        value: emaValue
-      });
-    }
-  }
-  return result;
-}
-var INDICATORS;
-var init_indicators = __esm({
-  "src/workbench/indicators.ts"() {
-    "use strict";
-    INDICATORS = [
-      {
-        id: "ema20",
-        label: "EMA 20",
-        color: "#f5a524",
-        lineWidth: 2,
-        defaultEnabled: true,
-        compute: (candles) => buildMovingAverage(candles, 20, "ema")
-      },
-      {
-        id: "ema50",
-        label: "EMA 50",
-        color: "#5e7cff",
-        lineWidth: 2,
-        defaultEnabled: true,
-        compute: (candles) => buildMovingAverage(candles, 50, "ema")
-      },
-      {
-        id: "sma20",
-        label: "SMA 20",
-        color: "#a4abb6",
-        lineWidth: 1,
-        defaultEnabled: false,
-        compute: (candles) => buildMovingAverage(candles, 20, "sma")
-      }
-    ];
-  }
-});
-
-// src/workbench/strategies.ts
-function computeEma(candles, period) {
-  const values = Array(candles.length).fill(Number.NaN);
-  if (candles.length < period) {
     return values;
   }
   const multiplier = 2 / (period + 1);
-  let rollingSum = 0;
   let emaValue = 0;
   for (let index = 0; index < candles.length; index += 1) {
     const close = candles[index].close;
@@ -7736,6 +7676,63 @@ function computeEma(candles, period) {
   }
   return values;
 }
+function buildMovingAverageSeries(candles, period, mode) {
+  const values = calculateMovingAverageValues(candles, period, mode);
+  const series = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    if (Number.isNaN(value)) {
+      continue;
+    }
+    series.push({
+      time: candles[index].open_time / 1e3,
+      value
+    });
+  }
+  return series;
+}
+var init_movingAverage = __esm({
+  "src/workbench/movingAverage.ts"() {
+    "use strict";
+  }
+});
+
+// src/workbench/indicators.ts
+var INDICATORS;
+var init_indicators = __esm({
+  "src/workbench/indicators.ts"() {
+    "use strict";
+    init_movingAverage();
+    INDICATORS = [
+      {
+        id: "ema20",
+        label: "EMA 20",
+        color: "#f5a524",
+        lineWidth: 2,
+        defaultEnabled: true,
+        compute: (candles) => buildMovingAverageSeries(candles, 20, "ema")
+      },
+      {
+        id: "ema50",
+        label: "EMA 50",
+        color: "#5e7cff",
+        lineWidth: 2,
+        defaultEnabled: true,
+        compute: (candles) => buildMovingAverageSeries(candles, 50, "ema")
+      },
+      {
+        id: "sma20",
+        label: "SMA 20",
+        color: "#a4abb6",
+        lineWidth: 1,
+        defaultEnabled: false,
+        compute: (candles) => buildMovingAverageSeries(candles, 20, "sma")
+      }
+    ];
+  }
+});
+
+// src/workbench/strategies.ts
 function calculateMaxDrawdown(equityCurve) {
   let peak = equityCurve[0] ?? 1;
   let maxDrawdown = 0;
@@ -7752,8 +7749,8 @@ function markToMarketEquity(equityAtEntry, entryPrice, currentPrice) {
   return equityAtEntry * (currentPrice / entryPrice);
 }
 function runEmaCross(candles) {
-  const fast = computeEma(candles, 20);
-  const slow = computeEma(candles, 50);
+  const fast = calculateMovingAverageValues(candles, 20, "ema");
+  const slow = calculateMovingAverageValues(candles, 50, "ema");
   const trades = [];
   const equityCurve = [1];
   let inPosition = false;
@@ -7828,6 +7825,7 @@ var STRATEGIES;
 var init_strategies = __esm({
   "src/workbench/strategies.ts"() {
     "use strict";
+    init_movingAverage();
     STRATEGIES = [
       {
         id: "none",

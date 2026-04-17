@@ -172,7 +172,7 @@
   }
 
   function setLoading(loading, message) {
-    ui.loadingMask.textContent = message || "Loading candles…";
+    ui.loadingMask.textContent = message || "Loading candles...";
     ui.loadingMask.classList.toggle("is-hidden", !loading);
   }
 
@@ -242,18 +242,39 @@
   }
 
   function computeEma(rows, period) {
+    if (rows.length < period) {
+      return [];
+    }
+
+    // Seed from the initial SMA window so the static terminal matches the workbench overlays.
     const multiplier = 2 / (period + 1);
-    let previous = null;
-    return rows
-      .map((row, index) => {
-        const close = row.close;
-        previous = previous === null ? close : close * multiplier + previous * (1 - multiplier);
-        return {
+    let rollingSum = 0;
+    let emaValue = 0;
+    const series = [];
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
+      rollingSum += row.close;
+
+      if (index === period - 1) {
+        emaValue = rollingSum / period;
+        series.push({
           time: row.open_time / 1000,
-          value: Number(previous.toFixed(6)),
-        };
-      })
-      .filter((_, index) => index >= period - 1);
+          value: Number(emaValue.toFixed(6)),
+        });
+        continue;
+      }
+
+      if (index >= period) {
+        emaValue = row.close * multiplier + emaValue * (1 - multiplier);
+        series.push({
+          time: row.open_time / 1000,
+          value: Number(emaValue.toFixed(6)),
+        });
+      }
+    }
+
+    return series;
   }
 
   function transformRows(rows) {
@@ -362,7 +383,7 @@
       : "--";
 
     ui.headlineCoverage.textContent = coverage
-      ? `${formatDateOnly(coverage.first_open_time_utc)} → ${formatDateOnly(coverage.last_close_time_utc)}`
+      ? `${formatDateOnly(coverage.first_open_time_utc)} -> ${formatDateOnly(coverage.last_close_time_utc)}`
       : "Coverage unavailable";
   }
 
@@ -380,7 +401,7 @@
 
   async function activateTimeframe(interval) {
     state.selectedTimeframe = interval;
-    setLoading(true, `Loading ${interval} candles…`);
+    setLoading(true, `Loading ${interval} candles...`);
     updateCoverageSelection(interval);
 
     const dataset = await loadDataset(interval);
@@ -399,7 +420,7 @@
     updateHeadline(dataset);
     updateSidebar(interval, dataset);
 
-    ui.panelTitle.textContent = `SLV/USDC · ${interval}`;
+    ui.panelTitle.textContent = `SLV/USDC - ${interval}`;
     ui.legendInterval.textContent = interval;
     ui.currentCsvLink.href = `./data/hyperliquid/slv_usdc_${interval}.csv`;
     ui.currentCsvLink.textContent = `${interval.toUpperCase()} CSV`;
@@ -438,7 +459,7 @@
       button.innerHTML = `
         <div class="coverage-tag">${interval.toUpperCase()}</div>
         <div class="coverage-text">
-          <strong>${formatDateOnly(coverage.first_open_time_utc)} → ${formatDateOnly(coverage.last_close_time_utc)}</strong>
+          <strong>${formatDateOnly(coverage.first_open_time_utc)} -> ${formatDateOnly(coverage.last_close_time_utc)}</strong>
           <span>${formatInteger(coverage.rows)} candles</span>
         </div>
         <div class="coverage-meta">
@@ -497,7 +518,7 @@
 
   async function initialize() {
     try {
-      setLoading(true, "Loading metadata…");
+      setLoading(true, "Loading metadata...");
 
       const response = await fetch("./data/hyperliquid/slv_usdc_metadata.json", { cache: "no-store" });
       if (!response.ok) {
