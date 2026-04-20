@@ -7316,6 +7316,10 @@ function validateRange(row, lineNumber) {
   if (row.close_time <= row.open_time) {
     throw new Error(`Invalid candle timestamps at line ${lineNumber}`);
   }
+  const candleSpanMs = row.close_time - row.open_time + 1;
+  if (candleSpanMs > INTERVAL_SPAN_MS[row.interval]) {
+    throw new Error(`Candle span exceeds ${row.interval} at line ${lineNumber}`);
+  }
   if (row.volume < 0) {
     throw new Error(`Invalid volume at line ${lineNumber}`);
   }
@@ -7340,6 +7344,7 @@ function parseCandleCsv(text, options = {}) {
   }
   const candles = [];
   let previousOpenTime = null;
+  let previousCloseTime = null;
   for (let index = 1; index < lines.length; index += 1) {
     const line = lines[index]?.trim();
     if (!line) {
@@ -7391,13 +7396,17 @@ function parseCandleCsv(text, options = {}) {
     if (previousOpenTime !== null && row.open_time <= previousOpenTime) {
       throw new Error(`Non-ascending open_time at line ${lineNumber}`);
     }
+    if (previousCloseTime !== null && row.open_time <= previousCloseTime) {
+      throw new Error(`Overlapping candle timestamps at line ${lineNumber}`);
+    }
     validateRange(row, lineNumber);
     candles.push(row);
     previousOpenTime = row.open_time;
+    previousCloseTime = row.close_time;
   }
   return candles;
 }
-var EXPECTED_HEADER, VALID_INTERVALS;
+var EXPECTED_HEADER, VALID_INTERVALS, INTERVAL_SPAN_MS;
 var init_candleValidation = __esm({
   "src/workbench/candleValidation.ts"() {
     "use strict";
@@ -7417,6 +7426,15 @@ var init_candleValidation = __esm({
       "trade_count"
     ].join(",");
     VALID_INTERVALS = /* @__PURE__ */ new Set(["1m", "5m", "15m", "1h", "4h", "1d", "1w"]);
+    INTERVAL_SPAN_MS = {
+      "1m": 6e4,
+      "5m": 5 * 6e4,
+      "15m": 15 * 6e4,
+      "1h": 60 * 6e4,
+      "4h": 4 * 60 * 6e4,
+      "1d": 24 * 60 * 6e4,
+      "1w": 7 * 24 * 60 * 6e4
+    };
   }
 });
 

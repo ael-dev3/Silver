@@ -17,6 +17,15 @@ const EXPECTED_HEADER = [
 ].join(",");
 
 const VALID_INTERVALS = new Set<Interval>(["1m", "5m", "15m", "1h", "4h", "1d", "1w"]);
+const INTERVAL_SPAN_MS: Record<Interval, number> = {
+  "1m": 60_000,
+  "5m": 5 * 60_000,
+  "15m": 15 * 60_000,
+  "1h": 60 * 60_000,
+  "4h": 4 * 60 * 60_000,
+  "1d": 24 * 60 * 60_000,
+  "1w": 7 * 24 * 60 * 60_000,
+};
 
 interface ParseCandleCsvOptions {
   expectedInterval?: Interval;
@@ -42,6 +51,11 @@ function parseInteger(rawValue: string, fieldName: string, lineNumber: number): 
 function validateRange(row: CandleRow, lineNumber: number): void {
   if (row.close_time <= row.open_time) {
     throw new Error(`Invalid candle timestamps at line ${lineNumber}`);
+  }
+
+  const candleSpanMs = row.close_time - row.open_time + 1;
+  if (candleSpanMs > INTERVAL_SPAN_MS[row.interval]) {
+    throw new Error(`Candle span exceeds ${row.interval} at line ${lineNumber}`);
   }
 
   if (row.volume < 0) {
@@ -76,6 +90,7 @@ export function parseCandleCsv(
 
   const candles: CandleRow[] = [];
   let previousOpenTime: number | null = null;
+  let previousCloseTime: number | null = null;
 
   for (let index = 1; index < lines.length; index += 1) {
     const line = lines[index]?.trim();
@@ -136,9 +151,14 @@ export function parseCandleCsv(
       throw new Error(`Non-ascending open_time at line ${lineNumber}`);
     }
 
+    if (previousCloseTime !== null && row.open_time <= previousCloseTime) {
+      throw new Error(`Overlapping candle timestamps at line ${lineNumber}`);
+    }
+
     validateRange(row, lineNumber);
     candles.push(row);
     previousOpenTime = row.open_time;
+    previousCloseTime = row.close_time;
   }
 
   return candles;

@@ -41,4 +41,25 @@ describe("parseCandleCsv", () => {
         ].join("\n"),
       )).toThrow("Invalid open_time_utc at line 2");
   });
+
+  it("rejects candles whose reported span exceeds their declared interval", () => {
+    expect(() =>
+      parseCandleCsv(
+        [
+          HEADER,
+          "1772323200000,1772330399999,2026-03-01T00:00:00.000Z,2026-03-01T01:59:59.999Z,SLV/USDC,1h,31.100,31.200,31.000,31.150,100,2",
+        ].join("\n"),
+      )).toThrow("Candle span exceeds 1h at line 2");
+  });
+
+  it("rejects overlapping candles even when open_time stays ascending", () => {
+    expect(() =>
+      parseCandleCsv(
+        [
+          HEADER,
+          "1772323200000,1772326799999,2026-03-01T00:00:00.000Z,2026-03-01T00:59:59.999Z,SLV/USDC,1h,31.100,31.200,31.000,31.150,100,2",
+          "1772325000000,1772328599999,2026-03-01T00:30:00.000Z,2026-03-01T01:29:59.999Z,SLV/USDC,1h,31.150,31.250,31.100,31.225,110,3",
+        ].join("\n"),
+      )).toThrow("Overlapping candle timestamps at line 3");
+  });
 });

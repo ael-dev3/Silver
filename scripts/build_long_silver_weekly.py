@@ -16,6 +16,9 @@ SOURCE_TO_DATE = date.today().isoformat()
 SYMBOL = "XAGUSD"
 INTERVAL = "1w"
 DAY_MS = 86_400_000
+INTERVAL_DURATION_MS = {
+    "1w": 7 * DAY_MS,
+}
 
 
 def iso_utc(timestamp_ms: int) -> str:
@@ -61,6 +64,26 @@ def validate_ohlc_rows(rows: list[dict], *, label: str, row_label_key: str) -> N
         if high_price < max(open_price, close_price) or low_price > min(open_price, close_price) or high_price < low_price:
             row_label = row.get(row_label_key, f"row {index}")
             raise RuntimeError(f"{label} has invalid OHLC range at row {index} ({row_label}).")
+
+
+def validate_candle_timing(rows: list[dict], *, label: str) -> None:
+    previous_close: int | None = None
+    for index, row in enumerate(rows, start=1):
+        open_time = int(row["open_time"])
+        close_time = int(row["close_time"])
+        interval = row["interval"]
+        candle_span_ms = close_time - open_time + 1
+
+        if close_time <= open_time:
+            raise RuntimeError(f"{label} has invalid timestamps at row {index}.")
+
+        if candle_span_ms > INTERVAL_DURATION_MS[interval]:
+            raise RuntimeError(f"{label} row {index} exceeds the declared {interval} span.")
+
+        if previous_close is not None and open_time <= previous_close:
+            raise RuntimeError(f"{label} rows overlap at row {index}.")
+
+        previous_close = close_time
 
 
 def download_dukascopy_daily_csv(target_path: Path) -> None:
@@ -171,6 +194,7 @@ def aggregate_weekly(rows: list[dict]) -> list[dict]:
         )
 
     validate_ascending_timestamps(weekly_rows, key="open_time", label="Aggregated weekly")
+    validate_candle_timing(weekly_rows, label="Aggregated weekly")
     validate_ohlc_rows(weekly_rows, label="Aggregated weekly", row_label_key="open_time_utc")
     return weekly_rows
 

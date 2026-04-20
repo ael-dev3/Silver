@@ -22,6 +22,15 @@ EXPECTED_FIELDS = [
     "volume",
     "trade_count",
 ]
+INTERVAL_DURATION_MS = {
+    "1m": 60_000,
+    "5m": 5 * 60_000,
+    "15m": 15 * 60_000,
+    "1h": 60 * 60_000,
+    "4h": 4 * 60 * 60_000,
+    "1d": 24 * 60 * 60_000,
+    "1w": 7 * 24 * 60 * 60_000,
+}
 
 
 def read_candle_csv(path: Path) -> tuple[list[str], list[dict[str, str]]]:
@@ -52,10 +61,12 @@ class DatasetIntegrityTests(unittest.TestCase):
 
                 expected_interval = path.stem.rsplit("_", maxsplit=1)[-1]
                 previous_open_time = None
+                previous_close_time = None
 
                 for index, row in enumerate(rows, start=2):
                     open_time = int(row["open_time"])
                     close_time = int(row["close_time"])
+                    candle_span_ms = close_time - open_time + 1
                     open_price = float(row["open"])
                     high_price = float(row["high"])
                     low_price = float(row["low"])
@@ -67,7 +78,10 @@ class DatasetIntegrityTests(unittest.TestCase):
 
                     if previous_open_time is not None:
                         self.assertGreater(open_time, previous_open_time, f"{path.name} row {index} is not strictly ascending.")
+                    if previous_close_time is not None:
+                        self.assertGreater(open_time, previous_close_time, f"{path.name} row {index} overlaps the previous candle.")
                     self.assertGreater(close_time, open_time, f"{path.name} row {index} has an invalid close_time.")
+                    self.assertLessEqual(candle_span_ms, INTERVAL_DURATION_MS[expected_interval], f"{path.name} row {index} exceeds the declared {expected_interval} span.")
                     self.assertEqual(open_time_utc_ms, open_time, f"{path.name} row {index} open_time_utc drifted from open_time.")
                     self.assertEqual(close_time_utc_ms, close_time, f"{path.name} row {index} close_time_utc drifted from close_time.")
                     self.assertLessEqual(low_price, min(open_price, close_price), f"{path.name} row {index} low does not envelope the candle body.")
@@ -78,6 +92,7 @@ class DatasetIntegrityTests(unittest.TestCase):
                     self.assertEqual(row["interval"], expected_interval, f"{path.name} row {index} has an unexpected interval.")
 
                     previous_open_time = open_time
+                    previous_close_time = close_time
 
     def test_hyperliquid_metadata_coverage_matches_checked_in_csvs(self) -> None:
         metadata = json.loads(HYPERLIQUID_METADATA_PATH.read_text(encoding="utf-8"))
