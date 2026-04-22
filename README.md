@@ -13,7 +13,8 @@ This project centers on Hyperliquid `SLV/USDC` spot data and ships two open-sour
 
 - raw Hyperliquid candle exports under `data/hyperliquid/`
 - a long-history weekly reference file under `data/reference/`
-- a static terminal UI in `index.html`, `app.css`, and `app.js`
+- a static terminal UI in `index.html`, `app.css`, and generated `app.js`
+- a typed terminal source under `src/terminal/` that reuses the shared candle validation and EMA logic
 - a modular TypeScript workbench in `workbench/` and `src/workbench/`
 - a reproducible download script in `scripts/download_hyperliquid_slv.py`
 - a reproducible long-history builder in `scripts/build_long_silver_weekly.py`
@@ -119,8 +120,8 @@ Caveats:
 
 - TradingView Lightweight Charts 5.1.0
 - Apache License 2.0 for the vendored chart library
-- custom HTML, CSS, and JavaScript app shell
-- modular TypeScript workbench bundled with esbuild
+- custom HTML and CSS app shell
+- TypeScript terminal and workbench bundles built with esbuild
 - static GitHub Pages deployment
 
 ## Refreshing the data
@@ -144,7 +145,7 @@ Build the long-history weekly reference file:
 python scripts/build_long_silver_weekly.py
 ```
 
-Build the TypeScript workbench bundle:
+Build the terminal and workbench bundles:
 
 ```bash
 npm run build
@@ -162,7 +163,7 @@ Run the full validation suite:
 npm test
 ```
 
-This runs TypeScript checks, Vitest, Python dataset-integrity tests, and the workbench build.
+This runs TypeScript checks, Vitest, Python dataset-integrity tests, and both browser builds.
 
 ## Repo layout
 
@@ -183,6 +184,9 @@ scripts/
   build_long_silver_weekly.py
   download_hyperliquid_slv.py
 src/
+  terminal/
+    main.ts
+    terminalData.ts
   workbench/
     catalog.ts
     chartController.ts

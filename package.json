@@ -4,8 +4,9 @@
   "description": "Live terminal: https://ael-dev3.github.io/Silver-terminal/",
   "main": "app.js",
   "scripts": {
+    "build:terminal": "esbuild src/terminal/main.ts --bundle --format=iife --platform=browser --target=es2020 --outfile=app.js",
     "build:workbench": "esbuild src/workbench/main.ts --bundle --format=esm --platform=browser --target=es2020 --outfile=workbench/assets/workbench.js",
-    "build": "npm run build:workbench",
+    "build": "npm run build:terminal && npm run build:workbench",
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run",
     "test:data": "python -m unittest discover -s tests -p \"test_*.py\" -q",
