@@ -52,6 +52,26 @@ describe("parseCandleCsv", () => {
       )).toThrow("Candle span exceeds 1h at line 2");
   });
 
+  it("rejects blank numeric cells instead of coercing them to zero", () => {
+    expect(() =>
+      parseCandleCsv(
+        [
+          HEADER,
+          "1772323200000,1772326799999,2026-03-01T00:00:00.000Z,2026-03-01T00:59:59.999Z,SLV/USDC,1h,31.100,31.200,31.000,31.150, ,2",
+        ].join("\n"),
+      )).toThrow("Invalid volume at line 2");
+  });
+
+  it("rejects non-literal integer cells in timestamp and count fields", () => {
+    expect(() =>
+      parseCandleCsv(
+        [
+          HEADER,
+          "1772323200000,1.772326799999e12,2026-03-01T00:00:00.000Z,2026-03-01T00:59:59.999Z,SLV/USDC,1h,31.100,31.200,31.000,31.150,100,2",
+        ].join("\n"),
+      )).toThrow("Invalid close_time at line 2");
+  });
+
   it("rejects overlapping candles even when open_time stays ascending", () => {
     expect(() =>
       parseCandleCsv(

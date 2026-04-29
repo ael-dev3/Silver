@@ -6738,13 +6738,21 @@
 
   // src/workbench/candleValidation.ts
   function parseFiniteNumber(rawValue, fieldName, lineNumber) {
-    const value = Number(rawValue);
+    const trimmedValue = rawValue.trim();
+    if (!trimmedValue) {
+      throw new Error(`Invalid ${fieldName} at line ${lineNumber}`);
+    }
+    const value = Number(trimmedValue);
     if (!Number.isFinite(value)) {
       throw new Error(`Invalid ${fieldName} at line ${lineNumber}`);
     }
     return value;
   }
   function parseInteger(rawValue, fieldName, lineNumber) {
+    const trimmedValue = rawValue.trim();
+    if (!INTEGER_TEXT_PATTERN.test(trimmedValue)) {
+      throw new Error(`Invalid ${fieldName} at line ${lineNumber}`);
+    }
     const value = parseFiniteNumber(rawValue, fieldName, lineNumber);
     if (!Number.isSafeInteger(value)) {
       throw new Error(`Invalid ${fieldName} at line ${lineNumber}`);
@@ -6845,7 +6853,7 @@
     }
     return candles;
   }
-  var EXPECTED_HEADER, VALID_INTERVALS, INTERVAL_SPAN_MS;
+  var EXPECTED_HEADER, VALID_INTERVALS, INTERVAL_SPAN_MS, INTEGER_TEXT_PATTERN;
   var init_candleValidation = __esm({
     "src/workbench/candleValidation.ts"() {
       "use strict";
@@ -6874,6 +6882,7 @@
         "1d": 24 * 60 * 6e4,
         "1w": 7 * 24 * 60 * 6e4
       };
+      INTEGER_TEXT_PATTERN = /^-?\d+$/;
     }
   });
 

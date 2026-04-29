@@ -27,13 +27,20 @@ const INTERVAL_SPAN_MS: Record<Interval, number> = {
   "1w": 7 * 24 * 60 * 60_000,
 };
 
+const INTEGER_TEXT_PATTERN = /^-?\d+$/;
+
 interface ParseCandleCsvOptions {
   expectedInterval?: Interval;
   datasetLabel?: string;
 }
 
 function parseFiniteNumber(rawValue: string, fieldName: string, lineNumber: number): number {
-  const value = Number(rawValue);
+  const trimmedValue = rawValue.trim();
+  if (!trimmedValue) {
+    throw new Error(`Invalid ${fieldName} at line ${lineNumber}`);
+  }
+
+  const value = Number(trimmedValue);
   if (!Number.isFinite(value)) {
     throw new Error(`Invalid ${fieldName} at line ${lineNumber}`);
   }
@@ -41,6 +48,11 @@ function parseFiniteNumber(rawValue: string, fieldName: string, lineNumber: numb
 }
 
 function parseInteger(rawValue: string, fieldName: string, lineNumber: number): number {
+  const trimmedValue = rawValue.trim();
+  if (!INTEGER_TEXT_PATTERN.test(trimmedValue)) {
+    throw new Error(`Invalid ${fieldName} at line ${lineNumber}`);
+  }
+
   const value = parseFiniteNumber(rawValue, fieldName, lineNumber);
   if (!Number.isSafeInteger(value)) {
     throw new Error(`Invalid ${fieldName} at line ${lineNumber}`);
