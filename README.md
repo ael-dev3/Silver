@@ -1,5 +1,7 @@
 # Hyperliquid Silver Terminal
 
+[![CI](https://github.com/ael-dev3/Silver/actions/workflows/ci.yml/badge.svg)](https://github.com/ael-dev3/Silver/actions/workflows/ci.yml)
+
 Live links:
 
 - Silver Terminal: https://ael-dev3.github.io/Silver-terminal/ - Hyperliquid-only `SLV/USDC` data across the checked-in rolling timeframes.
