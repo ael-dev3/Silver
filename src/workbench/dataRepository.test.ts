@@ -182,6 +182,49 @@ describe("DataRepository", () => {
     ]);
   });
 
+  it("falls back to CSV-derived coverage when metadata coverage windows are reversed", async () => {
+    const fetcher = vi.fn(async (path: string) => {
+      if (path === "/meta.json") {
+        return response({
+          json: {
+            source: "Hyperliquid",
+            coverage: [
+              {
+                interval: "1d",
+                rows: 2,
+                first_open_time_utc: "2026-03-02T00:00:00.000Z",
+                last_close_time_utc: "2026-03-01T23:59:59.999Z",
+              },
+            ],
+          },
+        });
+      }
+
+      if (path === "/silver_1d.csv") {
+        return response({ text: buildCsv("1d") });
+      }
+
+      throw new Error(`Unexpected path: ${path}`);
+    });
+    const repository = new DataRepository(fetcher);
+
+    const overview = await repository.loadOverview(
+      makeDefinition({ intervals: ["1d"], defaultInterval: "1d" }),
+    );
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenNthCalledWith(1, "/meta.json", { cache: "no-store" });
+    expect(fetcher).toHaveBeenNthCalledWith(2, "/silver_1d.csv", { cache: "no-store" });
+    expect(overview.coverage).toEqual([
+      {
+        interval: "1d",
+        rows: 2,
+        first_open_time_utc: "2026-03-01T00:00:00.000Z",
+        last_close_time_utc: "2026-03-02T23:59:59.999Z",
+      },
+    ]);
+  });
+
   it("rejects malformed candles whose close falls outside the reported range", async () => {
     const repository = new DataRepository(async (path) => {
       if (path === "/silver_1h.csv") {

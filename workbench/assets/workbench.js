@@ -7474,17 +7474,32 @@ function mapMetadata(definition, metadata) {
 function isPositiveSafeInteger(value) {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 }
-function hasValidCoverageTimestamp(rawValue, expectedMs) {
+function parseCoverageTimestamp(rawValue, expectedMs) {
   if (typeof rawValue !== "string" || rawValue.trim().length === 0) {
-    return false;
+    return null;
   }
   if (expectedMs === void 0) {
-    return isValidUtcTimestampText(rawValue);
+    if (!isValidUtcTimestampText(rawValue)) {
+      return null;
+    }
+    const parsed = Date.parse(rawValue.trim());
+    return Number.isFinite(parsed) ? parsed : null;
   }
-  return typeof expectedMs === "number" && Number.isSafeInteger(expectedMs) && isUtcTimestampTextForMs(rawValue, expectedMs);
+  if (typeof expectedMs !== "number" || !Number.isSafeInteger(expectedMs) || !isUtcTimestampTextForMs(rawValue, expectedMs)) {
+    return null;
+  }
+  return expectedMs;
 }
 function isValidCoverageEntry(definition, entry) {
-  return definition.intervals.includes(entry.interval) && isPositiveSafeInteger(entry.rows) && hasValidCoverageTimestamp(entry.first_open_time_utc, entry.first_open_time) && hasValidCoverageTimestamp(entry.last_close_time_utc, entry.last_close_time);
+  const firstOpenTime = parseCoverageTimestamp(
+    entry.first_open_time_utc,
+    entry.first_open_time
+  );
+  const lastCloseTime = parseCoverageTimestamp(
+    entry.last_close_time_utc,
+    entry.last_close_time
+  );
+  return definition.intervals.includes(entry.interval) && isPositiveSafeInteger(entry.rows) && firstOpenTime !== null && lastCloseTime !== null && firstOpenTime <= lastCloseTime;
 }
 function normalizeCoverage(definition, coverage) {
   if (!coverage?.length) {

@@ -70,31 +70,50 @@ function isPositiveSafeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 }
 
-function hasValidCoverageTimestamp(rawValue: unknown, expectedMs: unknown): rawValue is string {
+function parseCoverageTimestamp(rawValue: unknown, expectedMs: unknown): number | null {
   if (typeof rawValue !== "string" || rawValue.trim().length === 0) {
-    return false;
+    return null;
   }
 
   if (expectedMs === undefined) {
-    return isValidUtcTimestampText(rawValue);
+    if (!isValidUtcTimestampText(rawValue)) {
+      return null;
+    }
+
+    const parsed = Date.parse(rawValue.trim());
+    return Number.isFinite(parsed) ? parsed : null;
   }
 
-  return (
-    typeof expectedMs === "number" &&
-    Number.isSafeInteger(expectedMs) &&
-    isUtcTimestampTextForMs(rawValue, expectedMs)
-  );
+  if (
+    typeof expectedMs !== "number" ||
+    !Number.isSafeInteger(expectedMs) ||
+    !isUtcTimestampTextForMs(rawValue, expectedMs)
+  ) {
+    return null;
+  }
+
+  return expectedMs;
 }
 
 function isValidCoverageEntry(
   definition: DatasetDefinition,
   entry: RawMetadataCoverage,
 ): entry is CoverageEntry {
+  const firstOpenTime = parseCoverageTimestamp(
+    entry.first_open_time_utc,
+    entry.first_open_time,
+  );
+  const lastCloseTime = parseCoverageTimestamp(
+    entry.last_close_time_utc,
+    entry.last_close_time,
+  );
+
   return (
     definition.intervals.includes(entry.interval) &&
     isPositiveSafeInteger(entry.rows) &&
-    hasValidCoverageTimestamp(entry.first_open_time_utc, entry.first_open_time) &&
-    hasValidCoverageTimestamp(entry.last_close_time_utc, entry.last_close_time)
+    firstOpenTime !== null &&
+    lastCloseTime !== null &&
+    firstOpenTime <= lastCloseTime
   );
 }
 
