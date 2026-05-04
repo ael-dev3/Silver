@@ -8,7 +8,7 @@ import type {
   LoadedDataset,
 } from "./types";
 import { parseCandleCsv } from "./candleValidation";
-import { isUtcTimestampTextForMs, isValidUtcTimestampText } from "./timestampValidation";
+import { isUtcTimestampTextForMs, parseUtcTimestampTextToMs } from "./timestampValidation";
 
 interface RawMetadataCoverage {
   interval: Interval;
@@ -76,12 +76,7 @@ function parseCoverageTimestamp(rawValue: unknown, expectedMs: unknown): number 
   }
 
   if (expectedMs === undefined) {
-    if (!isValidUtcTimestampText(rawValue)) {
-      return null;
-    }
-
-    const parsed = Date.parse(rawValue.trim());
-    return Number.isFinite(parsed) ? parsed : null;
+    return parseUtcTimestampTextToMs(rawValue);
   }
 
   if (

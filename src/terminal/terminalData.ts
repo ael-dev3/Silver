@@ -1,6 +1,6 @@
 import { parseCandleCsv } from "../workbench/candleValidation";
 import { calculateMovingAverageValues } from "../workbench/movingAverage";
-import { isUtcTimestampTextForMs, isValidUtcTimestampText } from "../workbench/timestampValidation";
+import { isUtcTimestampTextForMs, parseUtcTimestampTextToMs } from "../workbench/timestampValidation";
 import type { CandleRow, CoverageEntry, IndicatorPoint, Interval } from "../workbench/types";
 
 const INTERVAL_ORDER: Interval[] = ["1m", "5m", "15m", "1h", "4h", "1d", "1w"];
@@ -84,13 +84,14 @@ function parseTimestampText(
   const text = requireNonEmptyString(textValue, utcFieldName);
 
   if (epochValue === undefined || epochValue === null) {
-    if (!isValidUtcTimestampText(text)) {
+    const epochMs = parseUtcTimestampTextToMs(text);
+    if (epochMs === null) {
       throw new Error(`Invalid ${utcFieldName}`);
     }
 
     return {
       text,
-      epochMs: Date.parse(text),
+      epochMs,
     };
   }
 

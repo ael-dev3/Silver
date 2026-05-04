@@ -42,6 +42,16 @@ describe("parseCandleCsv", () => {
       )).toThrow("Invalid open_time_utc at line 2");
   });
 
+  it("rejects timestamp text with non-zero sub-millisecond precision", () => {
+    expect(() =>
+      parseCandleCsv(
+        [
+          HEADER,
+          "1772323200000,1772326799999,2026-03-01T00:00:00.000Z,2026-03-01T00:59:59.999500Z,SLV/USDC,1h,31.100,31.200,31.000,31.150,100,2",
+        ].join("\n"),
+      )).toThrow("close_time_utc does not match close_time at line 2");
+  });
+
   it("rejects candles whose reported span exceeds their declared interval", () => {
     expect(() =>
       parseCandleCsv(
