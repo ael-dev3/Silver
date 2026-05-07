@@ -141,6 +141,19 @@ def build_coverage(interval: str, candles: list[dict]) -> dict:
     }
 
 
+def require_complete_coverage(coverage: list[dict]) -> None:
+    exported_intervals = {entry.get("interval") for entry in coverage}
+    missing_intervals = [
+        interval for interval in INTERVALS if interval not in exported_intervals
+    ]
+
+    if missing_intervals:
+        missing_text = ", ".join(missing_intervals)
+        raise RuntimeError(
+            f"Missing closed candle data for required interval(s): {missing_text}"
+        )
+
+
 def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     pair = discover_slv_pair()
@@ -159,6 +172,8 @@ def main() -> None:
         print(f"Saved {len(candles):,} candles to {output_path}")
         if dropped_count:
             print(f"Dropped {dropped_count:,} open {interval} candle(s).")
+
+    require_complete_coverage(coverage)
 
     metadata = {
         "source": "Hyperliquid official API",

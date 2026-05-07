@@ -1,7 +1,7 @@
 {
   "source": "Hyperliquid official API",
   "api_url": "https://api.hyperliquid.xyz/info",
-  "downloaded_at_utc": "2026-05-07T17:30:22.882Z",
+  "downloaded_at_utc": "2026-05-07T23:26:29.865Z",
   "pair": {
     "pair_id": "@265",
     "pair_index": 265,
