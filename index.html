@@ -20,6 +20,7 @@
     <script defer src="./app.js"></script>
   </head>
   <body>
+    <a class="skip-link" href="#main-content">Skip to chart workspace</a>
     <div class="app-shell">
       <header class="topbar">
         <div class="brand-block">
@@ -53,7 +54,7 @@
         </nav>
       </header>
 
-      <main class="workspace">
+      <main class="workspace" id="main-content">
         <aside class="tool-rail" aria-label="Chart tools">
           <button class="tool-button is-active" id="tool-ema" type="button" title="Toggle EMA overlays">EMA</button>
           <button class="tool-button is-active" id="tool-volume" type="button" title="Toggle volume overlay">VOL</button>
@@ -64,7 +65,7 @@
           <div class="panel-header">
             <div>
               <p class="eyebrow">Silver Spot Chart</p>
-              <h2 id="panel-title">SLV/USDC · 1h</h2>
+              <h2 id="panel-title">SLV/USDC - 1h</h2>
             </div>
 
             <div class="header-meta">
@@ -87,7 +88,7 @@
           </div>
 
           <div class="chart-surface">
-            <div class="loading-mask" id="loading-mask" aria-live="polite">Loading candles…</div>
+            <div class="loading-mask" id="loading-mask" aria-live="polite">Loading candles...</div>
             <div id="chart"></div>
           </div>
 
