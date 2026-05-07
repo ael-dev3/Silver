@@ -29,6 +29,7 @@ The hosted UI provides:
 - candlestick charting for every checked-in timeframe
 - volume overlay
 - EMA overlays
+- export age and latest-candle freshness badges
 - TradingView-style dark terminal layout
 - keyboard timeframe shortcuts
 - direct links to the current CSV and metadata file
@@ -57,13 +58,13 @@ The Hyperliquid market data lives under `data/hyperliquid/`.
 
 | File | Timeframe | Rows | Coverage |
 | --- | --- | ---: | --- |
-| `data/hyperliquid/slv_usdc_1m.csv` | `1m` | 5,259 | 2026-03-27 23:52 UTC to 2026-03-31 15:30 UTC |
-| `data/hyperliquid/slv_usdc_5m.csv` | `5m` | 5,052 | 2026-03-14 02:35 UTC to 2026-03-31 15:34 UTC |
-| `data/hyperliquid/slv_usdc_15m.csv` | `15m` | 5,018 | 2026-02-07 09:15 UTC to 2026-03-31 15:44 UTC |
-| `data/hyperliquid/slv_usdc_1h.csv` | `1h` | 1,977 | 2026-01-08 07:00 UTC to 2026-03-31 15:59 UTC |
-| `data/hyperliquid/slv_usdc_4h.csv` | `4h` | 495 | 2026-01-08 04:00 UTC to 2026-03-31 15:59 UTC |
-| `data/hyperliquid/slv_usdc_1d.csv` | `1d` | 83 | 2026-01-08 00:00 UTC to 2026-03-31 23:59 UTC |
-| `data/hyperliquid/slv_usdc_1w.csv` | `1w` | 12 | 2026-01-08 00:00 UTC to 2026-04-01 23:59 UTC |
+| `data/hyperliquid/slv_usdc_1m.csv` | `1m` | 5,000 | 2026-05-04 03:39 UTC to 2026-05-07 14:58 UTC |
+| `data/hyperliquid/slv_usdc_5m.csv` | `5m` | 5,000 | 2026-04-20 06:20 UTC to 2026-05-07 14:59 UTC |
+| `data/hyperliquid/slv_usdc_15m.csv` | `15m` | 5,000 | 2026-03-16 13:00 UTC to 2026-05-07 14:59 UTC |
+| `data/hyperliquid/slv_usdc_1h.csv` | `1h` | 2,864 | 2026-01-08 07:00 UTC to 2026-05-07 14:59 UTC |
+| `data/hyperliquid/slv_usdc_4h.csv` | `4h` | 717 | 2026-01-08 04:00 UTC to 2026-05-07 15:59 UTC |
+| `data/hyperliquid/slv_usdc_1d.csv` | `1d` | 119 | 2026-01-08 00:00 UTC to 2026-05-06 23:59 UTC |
+| `data/hyperliquid/slv_usdc_1w.csv` | `1w` | 17 | 2026-01-08 00:00 UTC to 2026-05-06 23:59 UTC |
 
 The repo also includes `data/hyperliquid/slv_usdc_metadata.json`, which records:
 
@@ -78,7 +79,7 @@ The repo also includes:
 
 | File | Source | Market | Timeframe | Rows | Coverage |
 | --- | --- | --- | --- | ---: | --- |
-| `data/reference/xagusd_dukascopy_1w.csv` | Dukascopy | `XAGUSD` spot | `1w` | 1,401 | 1999-06-03 00:00 UTC to 2026-03-30 23:59 UTC |
+| `data/reference/xagusd_dukascopy_1w.csv` | Dukascopy | `XAGUSD` spot | `1w` | 1,406 | 1999-06-03 00:00 UTC to 2026-05-06 23:59 UTC |
 
 This file is intended for long-range weekly research and backtesting where Hyperliquid does not yet have enough history.
 

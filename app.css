@@ -257,6 +257,31 @@ button {
   background: var(--accent-soft);
 }
 
+.pill-freshness,
+.freshness-fresh,
+.freshness-quiet,
+.freshness-stale {
+  transition: border-color 180ms ease, background 180ms ease, color 180ms ease;
+}
+
+.freshness-fresh {
+  border-color: rgba(78, 201, 176, 0.42);
+  background: rgba(78, 201, 176, 0.12);
+  color: #dffcf5;
+}
+
+.freshness-quiet {
+  border-color: rgba(247, 185, 85, 0.46);
+  background: rgba(247, 185, 85, 0.12);
+  color: #ffe5ad;
+}
+
+.freshness-stale {
+  border-color: rgba(255, 107, 122, 0.48);
+  background: var(--danger-soft);
+  color: #ffd5da;
+}
+
 .timeframe-toolbar {
   display: flex;
   flex-wrap: wrap;

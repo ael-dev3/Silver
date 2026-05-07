@@ -16,6 +16,11 @@ import {
 } from "lightweight-charts";
 
 import { formatDateOnly, formatDateTime, formatInteger, formatPrice } from "../workbench/format";
+import {
+  describeCoverageFreshness,
+  describeExportAge,
+  type FreshnessTone,
+} from "../workbench/freshness";
 import type { CandleRow, CoverageEntry, Interval } from "../workbench/types";
 import {
   chooseInitialTimeframe,
@@ -46,6 +51,7 @@ interface Elements {
   sourcePill: HTMLElement;
   pairPill: HTMLElement;
   downloadedPill: HTMLElement;
+  freshnessPill: HTMLElement;
   legendSymbol: HTMLElement;
   legendInterval: HTMLElement;
   legendTime: HTMLElement;
@@ -62,6 +68,7 @@ interface Elements {
     volume: HTMLElement;
     trades: HTMLElement;
     window: HTMLElement;
+    dataLag: HTMLElement;
   };
   tools: {
     ema: HTMLButtonElement;
@@ -89,6 +96,7 @@ function getElements(): Elements {
     sourcePill: mustFind("source-pill"),
     pairPill: mustFind("pair-pill"),
     downloadedPill: mustFind("downloaded-pill"),
+    freshnessPill: mustFind("freshness-pill"),
     legendSymbol: mustFind("legend-symbol"),
     legendInterval: mustFind("legend-interval"),
     legendTime: mustFind("legend-time"),
@@ -105,6 +113,7 @@ function getElements(): Elements {
       volume: mustFind("stat-volume"),
       trades: mustFind("stat-trades"),
       window: mustFind("stat-window"),
+      dataLag: mustFind("stat-data-lag"),
     },
     tools: {
       ema: mustFind("tool-ema"),
@@ -132,6 +141,11 @@ function buildVolumeColor(row: CandleRow): string {
 
 function compareCoverage(left: CoverageEntry, right: CoverageEntry): number {
   return TIMEFRAME_ORDER.indexOf(left.interval) - TIMEFRAME_ORDER.indexOf(right.interval);
+}
+
+function applyFreshnessTone(element: HTMLElement, tone: FreshnessTone): void {
+  element.classList.remove("freshness-fresh", "freshness-quiet", "freshness-stale");
+  element.classList.add(`freshness-${tone}`);
 }
 
 class SilverTerminalApp {
@@ -320,7 +334,8 @@ class SilverTerminalApp {
     this.elements.legendSymbol.textContent = this.metadata.pairDisplayName;
     this.elements.sourcePill.textContent = this.metadata.source;
     this.elements.pairPill.textContent = this.metadata.pairId;
-    this.elements.downloadedPill.textContent = `Refreshed ${formatDateTime(this.metadata.downloadedAtUtc)}`;
+    this.elements.downloadedPill.textContent = describeExportAge(this.metadata.downloadedAtUtc);
+    this.elements.downloadedPill.title = `Refreshed ${formatDateTime(this.metadata.downloadedAtUtc)}`;
   }
 
   private buildTimeframeToolbar(intervals: readonly Interval[]): void {
@@ -560,6 +575,17 @@ class SilverTerminalApp {
     this.elements.headlineCoverage.textContent = coverage
       ? `${formatDateOnly(coverage.first_open_time_utc)} -> ${formatDateOnly(coverage.last_close_time_utc)}`
       : "Coverage unavailable";
+
+    if (coverage) {
+      const freshness = describeCoverageFreshness(coverage, this.metadata.downloadedAtUtc);
+      this.elements.freshnessPill.textContent = freshness.label;
+      this.elements.stats.dataLag.textContent = freshness.shortLabel;
+      applyFreshnessTone(this.elements.freshnessPill, freshness.tone);
+      applyFreshnessTone(this.elements.stats.dataLag, freshness.tone);
+    } else {
+      this.elements.freshnessPill.textContent = "Data freshness unavailable";
+      this.elements.stats.dataLag.textContent = "--";
+    }
   }
 
   private updateCoverageSelection(interval: Interval): void {

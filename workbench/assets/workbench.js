@@ -7698,6 +7698,70 @@ var init_format = __esm({
   }
 });
 
+// src/workbench/freshness.ts
+function requireUtcMs(value, fieldName) {
+  const epochMs = parseUtcTimestampTextToMs(value);
+  if (epochMs === null) {
+    throw new Error(`Invalid ${fieldName}`);
+  }
+  return epochMs;
+}
+function formatElapsedDuration(durationMs) {
+  const clampedMs = Math.max(0, durationMs);
+  if (clampedMs < MINUTE_MS) {
+    return "under 1m";
+  }
+  const days = Math.floor(clampedMs / DAY_MS);
+  const hours = Math.floor(clampedMs % DAY_MS / HOUR_MS);
+  const minutes = Math.floor(clampedMs % HOUR_MS / MINUTE_MS);
+  if (days > 0) {
+    return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+  }
+  if (hours > 0) {
+    return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+  }
+  return `${minutes}m`;
+}
+function describeExportAge(downloadedAtUtc, nowMs = Date.now()) {
+  const downloadedAtMs = requireUtcMs(downloadedAtUtc, "downloaded_at_utc");
+  return `Exported ${formatElapsedDuration(nowMs - downloadedAtMs)} ago`;
+}
+function describeCoverageFreshness(coverage, downloadedAtUtc) {
+  const downloadedAtMs = requireUtcMs(downloadedAtUtc, "downloaded_at_utc");
+  const lastCloseMs = requireUtcMs(coverage.last_close_time_utc, "last_close_time_utc");
+  const ageMs = Math.max(0, downloadedAtMs - lastCloseMs);
+  const intervalMs = INTERVAL_DURATION_MS[coverage.interval];
+  const freshThresholdMs = intervalMs * 1.5;
+  const quietThresholdMs = Math.max(intervalMs * 6, HOUR_MS);
+  const tone = ageMs <= freshThresholdMs ? "fresh" : ageMs <= quietThresholdMs ? "quiet" : "stale";
+  const shortLabel = ageMs < MINUTE_MS ? "closed at refresh" : `${formatElapsedDuration(ageMs)} before refresh`;
+  return {
+    ageMs,
+    tone,
+    shortLabel,
+    label: `Latest candle ${shortLabel}`
+  };
+}
+var MINUTE_MS, HOUR_MS, DAY_MS, INTERVAL_DURATION_MS;
+var init_freshness = __esm({
+  "src/workbench/freshness.ts"() {
+    "use strict";
+    init_timestampValidation();
+    MINUTE_MS = 6e4;
+    HOUR_MS = 60 * MINUTE_MS;
+    DAY_MS = 24 * HOUR_MS;
+    INTERVAL_DURATION_MS = {
+      "1m": MINUTE_MS,
+      "5m": 5 * MINUTE_MS,
+      "15m": 15 * MINUTE_MS,
+      "1h": HOUR_MS,
+      "4h": 4 * HOUR_MS,
+      "1d": DAY_MS,
+      "1w": 7 * DAY_MS
+    };
+  }
+});
+
 // src/workbench/movingAverage.ts
 function createEmptyValues(length) {
   return Array(length).fill(Number.NaN);
@@ -7912,6 +7976,7 @@ var require_main = __commonJS({
     init_chartController();
     init_dataRepository();
     init_format();
+    init_freshness();
     init_indicators();
     init_strategies();
     var INTERVAL_ORDER = ["1m", "5m", "15m", "1h", "4h", "1d", "1w"];
@@ -7959,6 +8024,7 @@ var require_main = __commonJS({
         sourceBadge: mustFind("#source-badge"),
         pairBadge: mustFind("#pair-badge"),
         refreshedBadge: mustFind("#refreshed-badge"),
+        freshnessBadge: mustFind("#freshness-badge"),
         activeCsvLink: mustFind("#active-csv-link"),
         metadataLink: mustFind("#metadata-link"),
         metadataLinkWrap: mustFind("#metadata-link-wrap"),
@@ -8016,6 +8082,10 @@ var require_main = __commonJS({
     }
     function getIndicatorMap() {
       return new Map(INDICATORS.map((indicator) => [indicator.id, indicator]));
+    }
+    function applyFreshnessTone(element, tone) {
+      element.classList.remove("freshness-fresh", "freshness-quiet", "freshness-stale");
+      element.classList.add(`freshness-${tone}`);
     }
     var WorkbenchApp = class {
       constructor() {
@@ -8253,7 +8323,20 @@ var require_main = __commonJS({
         this.elements.subtitle.textContent = definition.description;
         this.elements.sourceBadge.textContent = meta.sourceLabel;
         this.elements.pairBadge.textContent = meta.pairId ?? definition.market;
-        this.elements.refreshedBadge.textContent = meta.downloadedAtUtc ? `Refreshed ${formatDateTime(meta.downloadedAtUtc)}` : "Reference dataset";
+        this.elements.refreshedBadge.textContent = meta.downloadedAtUtc ? describeExportAge(meta.downloadedAtUtc) : "Reference dataset";
+        this.elements.refreshedBadge.title = meta.downloadedAtUtc ? `Refreshed ${formatDateTime(meta.downloadedAtUtc)}` : "";
+        if (meta.downloadedAtUtc) {
+          const freshness = describeCoverageFreshness(
+            this.currentDataset.coverage,
+            meta.downloadedAtUtc
+          );
+          this.elements.freshnessBadge.hidden = false;
+          this.elements.freshnessBadge.textContent = freshness.label;
+          applyFreshnessTone(this.elements.freshnessBadge, freshness.tone);
+        } else {
+          this.elements.freshnessBadge.hidden = true;
+          this.elements.freshnessBadge.textContent = "";
+        }
         this.elements.activeCsvLink.href = definition.csvPath(this.state.interval);
         this.elements.activeCsvLink.textContent = `${this.state.interval.toUpperCase()} CSV`;
         if (definition.metadataPath) {
@@ -8282,6 +8365,11 @@ var require_main = __commonJS({
           "V volume",
           "L log"
         ];
+        if (meta.downloadedAtUtc) {
+          linkParts.push(
+            describeCoverageFreshness(this.currentDataset.coverage, meta.downloadedAtUtc).shortLabel
+          );
+        }
         if (this.pageConfig.fixedInterval === null) {
           linkParts.splice(3, 0, "Keys 1-7 timeframe");
         }

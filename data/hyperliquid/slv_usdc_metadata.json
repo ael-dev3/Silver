@@ -1,7 +1,7 @@
 {
   "source": "Hyperliquid official API",
   "api_url": "https://api.hyperliquid.xyz/info",
-  "downloaded_at_utc": "2026-03-31T16:15:33.593235+00:00",
+  "downloaded_at_utc": "2026-05-07T17:30:22.882Z",
   "pair": {
     "pair_id": "@265",
     "pair_index": 265,
@@ -43,59 +43,59 @@
   "coverage": [
     {
       "interval": "1m",
-      "rows": 5259,
-      "first_open_time": 1774655520000,
-      "first_open_time_utc": "2026-03-27T23:52:00+00:00",
-      "last_close_time": 1774971059999,
-      "last_close_time_utc": "2026-03-31T15:30:59.999000+00:00"
+      "rows": 5000,
+      "first_open_time": 1777865940000,
+      "first_open_time_utc": "2026-05-04T03:39:00.000Z",
+      "last_close_time": 1778165939999,
+      "last_close_time_utc": "2026-05-07T14:58:59.999Z"
     },
     {
       "interval": "5m",
-      "rows": 5052,
-      "first_open_time": 1773455700000,
-      "first_open_time_utc": "2026-03-14T02:35:00+00:00",
-      "last_close_time": 1774971299999,
-      "last_close_time_utc": "2026-03-31T15:34:59.999000+00:00"
+      "rows": 5000,
+      "first_open_time": 1776666000000,
+      "first_open_time_utc": "2026-04-20T06:20:00.000Z",
+      "last_close_time": 1778165999999,
+      "last_close_time_utc": "2026-05-07T14:59:59.999Z"
     },
     {
       "interval": "15m",
-      "rows": 5018,
-      "first_open_time": 1770455700000,
-      "first_open_time_utc": "2026-02-07T09:15:00+00:00",
-      "last_close_time": 1774971899999,
-      "last_close_time_utc": "2026-03-31T15:44:59.999000+00:00"
+      "rows": 5000,
+      "first_open_time": 1773666000000,
+      "first_open_time_utc": "2026-03-16T13:00:00.000Z",
+      "last_close_time": 1778165999999,
+      "last_close_time_utc": "2026-05-07T14:59:59.999Z"
     },
     {
       "interval": "1h",
-      "rows": 1977,
+      "rows": 2864,
       "first_open_time": 1767855600000,
-      "first_open_time_utc": "2026-01-08T07:00:00+00:00",
-      "last_close_time": 1774972799999,
-      "last_close_time_utc": "2026-03-31T15:59:59.999000+00:00"
+      "first_open_time_utc": "2026-01-08T07:00:00.000Z",
+      "last_close_time": 1778165999999,
+      "last_close_time_utc": "2026-05-07T14:59:59.999Z"
     },
     {
       "interval": "4h",
-      "rows": 495,
+      "rows": 717,
       "first_open_time": 1767844800000,
-      "first_open_time_utc": "2026-01-08T04:00:00+00:00",
-      "last_close_time": 1774972799999,
-      "last_close_time_utc": "2026-03-31T15:59:59.999000+00:00"
+      "first_open_time_utc": "2026-01-08T04:00:00.000Z",
+      "last_close_time": 1778169599999,
+      "last_close_time_utc": "2026-05-07T15:59:59.999Z"
     },
     {
       "interval": "1d",
-      "rows": 82,
+      "rows": 119,
       "first_open_time": 1767830400000,
-      "first_open_time_utc": "2026-01-08T00:00:00+00:00",
-      "last_close_time": 1774915199999,
-      "last_close_time_utc": "2026-03-30T23:59:59.999000+00:00"
+      "first_open_time_utc": "2026-01-08T00:00:00.000Z",
+      "last_close_time": 1778111999999,
+      "last_close_time_utc": "2026-05-06T23:59:59.999Z"
     },
     {
       "interval": "1w",
-      "rows": 11,
+      "rows": 17,
       "first_open_time": 1767830400000,
-      "first_open_time_utc": "2026-01-08T00:00:00+00:00",
-      "last_close_time": 1774483199999,
-      "last_close_time_utc": "2026-03-25T23:59:59.999000+00:00"
+      "first_open_time_utc": "2026-01-08T00:00:00.000Z",
+      "last_close_time": 1778111999999,
+      "last_close_time_utc": "2026-05-06T23:59:59.999Z"
     }
   ]
 }

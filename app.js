@@ -6759,6 +6759,70 @@
     }
   });
 
+  // src/workbench/freshness.ts
+  function requireUtcMs(value, fieldName) {
+    const epochMs = parseUtcTimestampTextToMs(value);
+    if (epochMs === null) {
+      throw new Error(`Invalid ${fieldName}`);
+    }
+    return epochMs;
+  }
+  function formatElapsedDuration(durationMs) {
+    const clampedMs = Math.max(0, durationMs);
+    if (clampedMs < MINUTE_MS) {
+      return "under 1m";
+    }
+    const days = Math.floor(clampedMs / DAY_MS);
+    const hours = Math.floor(clampedMs % DAY_MS / HOUR_MS);
+    const minutes = Math.floor(clampedMs % HOUR_MS / MINUTE_MS);
+    if (days > 0) {
+      return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+    }
+    if (hours > 0) {
+      return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+    }
+    return `${minutes}m`;
+  }
+  function describeExportAge(downloadedAtUtc, nowMs = Date.now()) {
+    const downloadedAtMs = requireUtcMs(downloadedAtUtc, "downloaded_at_utc");
+    return `Exported ${formatElapsedDuration(nowMs - downloadedAtMs)} ago`;
+  }
+  function describeCoverageFreshness(coverage, downloadedAtUtc) {
+    const downloadedAtMs = requireUtcMs(downloadedAtUtc, "downloaded_at_utc");
+    const lastCloseMs = requireUtcMs(coverage.last_close_time_utc, "last_close_time_utc");
+    const ageMs = Math.max(0, downloadedAtMs - lastCloseMs);
+    const intervalMs = INTERVAL_DURATION_MS[coverage.interval];
+    const freshThresholdMs = intervalMs * 1.5;
+    const quietThresholdMs = Math.max(intervalMs * 6, HOUR_MS);
+    const tone = ageMs <= freshThresholdMs ? "fresh" : ageMs <= quietThresholdMs ? "quiet" : "stale";
+    const shortLabel = ageMs < MINUTE_MS ? "closed at refresh" : `${formatElapsedDuration(ageMs)} before refresh`;
+    return {
+      ageMs,
+      tone,
+      shortLabel,
+      label: `Latest candle ${shortLabel}`
+    };
+  }
+  var MINUTE_MS, HOUR_MS, DAY_MS, INTERVAL_DURATION_MS;
+  var init_freshness = __esm({
+    "src/workbench/freshness.ts"() {
+      "use strict";
+      init_timestampValidation();
+      MINUTE_MS = 6e4;
+      HOUR_MS = 60 * MINUTE_MS;
+      DAY_MS = 24 * HOUR_MS;
+      INTERVAL_DURATION_MS = {
+        "1m": MINUTE_MS,
+        "5m": 5 * MINUTE_MS,
+        "15m": 15 * MINUTE_MS,
+        "1h": HOUR_MS,
+        "4h": 4 * HOUR_MS,
+        "1d": DAY_MS,
+        "1w": 7 * DAY_MS
+      };
+    }
+  });
+
   // src/workbench/candleValidation.ts
   function parseFiniteNumber(rawValue, fieldName, lineNumber) {
     const trimmedValue = rawValue.trim();
@@ -7121,6 +7185,7 @@
     "src/terminal/main.ts"() {
       init_lightweight_charts_production();
       init_format();
+      init_freshness();
       init_terminalData();
       var TIMEFRAME_ORDER = ["1m", "5m", "15m", "1h", "4h", "1d", "1w"];
       var TIMEFRAME_SHORTCUTS = {
@@ -7149,6 +7214,7 @@
           sourcePill: mustFind("source-pill"),
           pairPill: mustFind("pair-pill"),
           downloadedPill: mustFind("downloaded-pill"),
+          freshnessPill: mustFind("freshness-pill"),
           legendSymbol: mustFind("legend-symbol"),
           legendInterval: mustFind("legend-interval"),
           legendTime: mustFind("legend-time"),
@@ -7164,7 +7230,8 @@
             range: mustFind("stat-range"),
             volume: mustFind("stat-volume"),
             trades: mustFind("stat-trades"),
-            window: mustFind("stat-window")
+            window: mustFind("stat-window"),
+            dataLag: mustFind("stat-data-lag")
           },
           tools: {
             ema: mustFind("tool-ema"),
@@ -7187,6 +7254,10 @@
       }
       function compareCoverage(left, right) {
         return TIMEFRAME_ORDER.indexOf(left.interval) - TIMEFRAME_ORDER.indexOf(right.interval);
+      }
+      function applyFreshnessTone(element, tone) {
+        element.classList.remove("freshness-fresh", "freshness-quiet", "freshness-stale");
+        element.classList.add(`freshness-${tone}`);
       }
       var SilverTerminalApp = class {
         constructor() {
@@ -7343,7 +7414,8 @@
           this.elements.legendSymbol.textContent = this.metadata.pairDisplayName;
           this.elements.sourcePill.textContent = this.metadata.source;
           this.elements.pairPill.textContent = this.metadata.pairId;
-          this.elements.downloadedPill.textContent = `Refreshed ${formatDateTime(this.metadata.downloadedAtUtc)}`;
+          this.elements.downloadedPill.textContent = describeExportAge(this.metadata.downloadedAtUtc);
+          this.elements.downloadedPill.title = `Refreshed ${formatDateTime(this.metadata.downloadedAtUtc)}`;
         }
         buildTimeframeToolbar(intervals) {
           this.elements.timeframeToolbar.replaceChildren();
@@ -7536,6 +7608,16 @@
           this.elements.stats.trades.textContent = formatNumber(averageTrades, 2);
           this.elements.stats.window.textContent = coverage ? `${formatDateOnly(coverage.first_open_time_utc)} to ${formatDateOnly(coverage.last_close_time_utc)}` : "--";
           this.elements.headlineCoverage.textContent = coverage ? `${formatDateOnly(coverage.first_open_time_utc)} -> ${formatDateOnly(coverage.last_close_time_utc)}` : "Coverage unavailable";
+          if (coverage) {
+            const freshness = describeCoverageFreshness(coverage, this.metadata.downloadedAtUtc);
+            this.elements.freshnessPill.textContent = freshness.label;
+            this.elements.stats.dataLag.textContent = freshness.shortLabel;
+            applyFreshnessTone(this.elements.freshnessPill, freshness.tone);
+            applyFreshnessTone(this.elements.stats.dataLag, freshness.tone);
+          } else {
+            this.elements.freshnessPill.textContent = "Data freshness unavailable";
+            this.elements.stats.dataLag.textContent = "--";
+          }
         }
         updateCoverageSelection(interval) {
           document.querySelectorAll("[data-timeframe]").forEach((element) => {

@@ -10,6 +10,11 @@ import {
   formatPercent,
   formatPrice,
 } from "./format";
+import {
+  describeCoverageFreshness,
+  describeExportAge,
+  type FreshnessTone,
+} from "./freshness";
 import { INDICATORS } from "./indicators";
 import { STRATEGIES } from "./strategies";
 import type {
@@ -59,6 +64,7 @@ interface Elements {
   sourceBadge: HTMLSpanElement;
   pairBadge: HTMLSpanElement;
   refreshedBadge: HTMLSpanElement;
+  freshnessBadge: HTMLSpanElement;
   activeCsvLink: HTMLAnchorElement;
   metadataLink: HTMLAnchorElement;
   metadataLinkWrap: HTMLDivElement;
@@ -133,6 +139,7 @@ function getElements(): Elements {
     sourceBadge: mustFind("#source-badge"),
     pairBadge: mustFind("#pair-badge"),
     refreshedBadge: mustFind("#refreshed-badge"),
+    freshnessBadge: mustFind("#freshness-badge"),
     activeCsvLink: mustFind("#active-csv-link"),
     metadataLink: mustFind("#metadata-link"),
     metadataLinkWrap: mustFind("#metadata-link-wrap"),
@@ -216,6 +223,11 @@ function getStrategyById(strategyId: string): StrategyDefinition {
 
 function getIndicatorMap(): Map<string, IndicatorDefinition> {
   return new Map(INDICATORS.map((indicator) => [indicator.id, indicator] as const));
+}
+
+function applyFreshnessTone(element: HTMLElement, tone: FreshnessTone): void {
+  element.classList.remove("freshness-fresh", "freshness-quiet", "freshness-stale");
+  element.classList.add(`freshness-${tone}`);
 }
 
 class WorkbenchApp {
@@ -508,8 +520,24 @@ class WorkbenchApp {
     this.elements.sourceBadge.textContent = meta.sourceLabel;
     this.elements.pairBadge.textContent = meta.pairId ?? definition.market;
     this.elements.refreshedBadge.textContent = meta.downloadedAtUtc
-      ? `Refreshed ${formatDateTime(meta.downloadedAtUtc)}`
+      ? describeExportAge(meta.downloadedAtUtc)
       : "Reference dataset";
+    this.elements.refreshedBadge.title = meta.downloadedAtUtc
+      ? `Refreshed ${formatDateTime(meta.downloadedAtUtc)}`
+      : "";
+
+    if (meta.downloadedAtUtc) {
+      const freshness = describeCoverageFreshness(
+        this.currentDataset.coverage,
+        meta.downloadedAtUtc,
+      );
+      this.elements.freshnessBadge.hidden = false;
+      this.elements.freshnessBadge.textContent = freshness.label;
+      applyFreshnessTone(this.elements.freshnessBadge, freshness.tone);
+    } else {
+      this.elements.freshnessBadge.hidden = true;
+      this.elements.freshnessBadge.textContent = "";
+    }
 
     this.elements.activeCsvLink.href = definition.csvPath(this.state.interval);
     this.elements.activeCsvLink.textContent = `${this.state.interval.toUpperCase()} CSV`;
@@ -548,6 +576,11 @@ class WorkbenchApp {
       "V volume",
       "L log",
     ];
+    if (meta.downloadedAtUtc) {
+      linkParts.push(
+        describeCoverageFreshness(this.currentDataset.coverage, meta.downloadedAtUtc).shortLabel,
+      );
+    }
     if (this.pageConfig.fixedInterval === null) {
       linkParts.splice(3, 0, "Keys 1-7 timeframe");
     }
