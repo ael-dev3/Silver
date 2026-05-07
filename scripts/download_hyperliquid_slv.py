@@ -56,15 +56,33 @@ def discover_slv_pair() -> dict:
     }
 
 
-def fetch_candles(pair_id: str, interval: str) -> list[dict]:
-    now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+def current_time_ms() -> int:
+    return int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+
+
+def candle_close_time_ms(candle: dict) -> int:
+    try:
+        close_time = int(candle["T"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise RuntimeError(f"Unexpected candle close timestamp: {candle!r}") from exc
+
+    if close_time < 0:
+        raise RuntimeError(f"Unexpected candle close timestamp: {candle!r}")
+    return close_time
+
+
+def filter_closed_candles(candles: list[dict], snapshot_ms: int) -> list[dict]:
+    return [candle for candle in candles if candle_close_time_ms(candle) <= snapshot_ms]
+
+
+def fetch_candles(pair_id: str, interval: str, end_time_ms: int) -> list[dict]:
     payload = {
         "type": "candleSnapshot",
         "req": {
             "coin": pair_id,
             "interval": interval,
             "startTime": 0,
-            "endTime": now_ms,
+            "endTime": end_time_ms,
         },
     }
     candles = post_info(payload)
@@ -126,21 +144,26 @@ def build_coverage(interval: str, candles: list[dict]) -> dict:
 def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     pair = discover_slv_pair()
+    snapshot_ms = current_time_ms()
 
     coverage = []
     for interval in INTERVALS:
-        candles = fetch_candles(pair["pair_id"], interval)
+        raw_candles = fetch_candles(pair["pair_id"], interval, snapshot_ms)
+        candles = filter_closed_candles(raw_candles, snapshot_ms)
+        dropped_count = len(raw_candles) - len(candles)
         if not candles:
             continue
         output_path = OUTPUT_DIR / f"slv_usdc_{interval}.csv"
         write_csv(output_path, candles)
         coverage.append(build_coverage(interval, candles))
         print(f"Saved {len(candles):,} candles to {output_path}")
+        if dropped_count:
+            print(f"Dropped {dropped_count:,} open {interval} candle(s).")
 
     metadata = {
         "source": "Hyperliquid official API",
         "api_url": API_URL,
-        "downloaded_at_utc": datetime.now(tz=timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+        "downloaded_at_utc": iso_utc(snapshot_ms),
         "pair": pair,
         "note": (
             "Hyperliquid candleSnapshot returns only the most recent candles for an interval. "

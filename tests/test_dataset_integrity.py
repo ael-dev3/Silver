@@ -112,6 +112,23 @@ class DatasetIntegrityTests(unittest.TestCase):
                 self.assertEqual(parse_utc_text_to_epoch_ms(coverage["first_open_time_utc"]), coverage["first_open_time"], f"{path.name} metadata first_open_time_utc drifted from first_open_time.")
                 self.assertEqual(parse_utc_text_to_epoch_ms(coverage["last_close_time_utc"]), coverage["last_close_time"], f"{path.name} metadata last_close_time_utc drifted from last_close_time.")
 
+    def test_hyperliquid_metadata_excludes_open_candles(self) -> None:
+        metadata = json.loads(HYPERLIQUID_METADATA_PATH.read_text(encoding="utf-8"))
+        downloaded_at_ms = parse_utc_text_to_epoch_ms(metadata["downloaded_at_utc"])
+
+        for entry in metadata["coverage"]:
+            with self.subTest(interval=entry["interval"]):
+                self.assertLessEqual(
+                    entry["last_close_time"],
+                    downloaded_at_ms,
+                    f"{entry['interval']} metadata advertises an open candle.",
+                )
+                self.assertLessEqual(
+                    parse_utc_text_to_epoch_ms(entry["last_close_time_utc"]),
+                    downloaded_at_ms,
+                    f"{entry['interval']} metadata close timestamp text advertises an open candle.",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -83,19 +83,19 @@
     },
     {
       "interval": "1d",
-      "rows": 83,
+      "rows": 82,
       "first_open_time": 1767830400000,
       "first_open_time_utc": "2026-01-08T00:00:00+00:00",
-      "last_close_time": 1775001599999,
-      "last_close_time_utc": "2026-03-31T23:59:59.999000+00:00"
+      "last_close_time": 1774915199999,
+      "last_close_time_utc": "2026-03-30T23:59:59.999000+00:00"
     },
     {
       "interval": "1w",
-      "rows": 12,
+      "rows": 11,
       "first_open_time": 1767830400000,
       "first_open_time_utc": "2026-01-08T00:00:00+00:00",
-      "last_close_time": 1775087999999,
-      "last_close_time_utc": "2026-04-01T23:59:59.999000+00:00"
+      "last_close_time": 1774483199999,
+      "last_close_time_utc": "2026-03-25T23:59:59.999000+00:00"
     }
   ]
 }
