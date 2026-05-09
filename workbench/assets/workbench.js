@@ -7968,6 +7968,43 @@ var init_strategies = __esm({
   }
 });
 
+// src/workbench/urlState.ts
+function validIndicatorIds() {
+  return new Set(INDICATORS.map((indicator) => indicator.id));
+}
+function defaultIndicatorIds() {
+  return new Set(
+    INDICATORS.filter((indicator) => indicator.defaultEnabled).map((indicator) => indicator.id)
+  );
+}
+function parseIndicatorIdsParam(indicatorParam) {
+  if (indicatorParam === null) {
+    return defaultIndicatorIds();
+  }
+  const trimmedParam = indicatorParam.trim();
+  if (!trimmedParam || trimmedParam.toLowerCase() === NO_INDICATORS_TOKEN) {
+    return /* @__PURE__ */ new Set();
+  }
+  const allowedIds = validIndicatorIds();
+  const indicatorIds = new Set(
+    trimmedParam.split(",").map((value) => value.trim()).filter((value) => allowedIds.has(value))
+  );
+  return indicatorIds.size ? indicatorIds : defaultIndicatorIds();
+}
+function serializeIndicatorIdsParam(indicatorIds) {
+  const activeIds = new Set(indicatorIds);
+  const orderedIds = INDICATORS.map((indicator) => indicator.id).filter((id) => activeIds.has(id));
+  return orderedIds.length ? orderedIds.join(",") : NO_INDICATORS_TOKEN;
+}
+var NO_INDICATORS_TOKEN;
+var init_urlState = __esm({
+  "src/workbench/urlState.ts"() {
+    "use strict";
+    init_indicators();
+    NO_INDICATORS_TOKEN = "none";
+  }
+});
+
 // src/workbench/main.ts
 var require_main = __commonJS({
   "src/workbench/main.ts"() {
@@ -7979,6 +8016,7 @@ var require_main = __commonJS({
     init_freshness();
     init_indicators();
     init_strategies();
+    init_urlState();
     var INTERVAL_ORDER = ["1m", "5m", "15m", "1h", "4h", "1d", "1w"];
     var RANGE_PRESETS = [
       { id: "50", label: "50", bars: 50 },
@@ -8046,11 +8084,6 @@ var require_main = __commonJS({
         statusLine: mustFind("#status-line")
       };
     }
-    function defaultIndicatorIds() {
-      return new Set(
-        INDICATORS.filter((indicator) => indicator.defaultEnabled).map((indicator) => indicator.id)
-      );
-    }
     function parseInitialState(config) {
       const params = new URL(window.location.href).searchParams;
       const requestedDatasetId = config.fixedDatasetId ?? params.get("dataset");
@@ -8060,15 +8093,12 @@ var require_main = __commonJS({
       const interval = requestedInterval && definition.intervals.includes(requestedInterval) ? requestedInterval : definition.defaultInterval;
       const requestedStrategyId = params.get("strategy");
       const strategyId = STRATEGIES.some((strategy) => strategy.id === requestedStrategyId) ? requestedStrategyId : "none";
-      const indicatorIds = params.get("ind") ? new Set(
-        params.get("ind")?.split(",").map((value) => value.trim()).filter((value) => INDICATORS.some((indicator) => indicator.id === value))
-      ) : defaultIndicatorIds();
       const requestedRange = params.get("range");
       return {
         datasetId,
         interval,
         strategyId,
-        activeIndicatorIds: indicatorIds.size ? indicatorIds : defaultIndicatorIds(),
+        activeIndicatorIds: parseIndicatorIdsParam(params.get("ind")),
         showVolume: params.get("volume") !== "0",
         priceScaleMode: params.get("scale") === "log" ? bi.Logarithmic : bi.Normal,
         rangePreset: RANGE_PRESETS.some((preset) => preset.id === requestedRange) ? requestedRange : "all"
@@ -8552,12 +8582,7 @@ var require_main = __commonJS({
         }
         url.searchParams.set("strategy", this.state.strategyId);
         url.searchParams.set("range", this.state.rangePreset);
-        const indicatorIds = [...this.state.activeIndicatorIds];
-        if (indicatorIds.length) {
-          url.searchParams.set("ind", indicatorIds.join(","));
-        } else {
-          url.searchParams.delete("ind");
-        }
+        url.searchParams.set("ind", serializeIndicatorIdsParam(this.state.activeIndicatorIds));
         if (!this.state.showVolume) {
           url.searchParams.set("volume", "0");
         } else {

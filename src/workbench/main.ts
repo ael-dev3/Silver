@@ -17,6 +17,11 @@ import {
 } from "./freshness";
 import { INDICATORS } from "./indicators";
 import { STRATEGIES } from "./strategies";
+import {
+  defaultIndicatorIds,
+  parseIndicatorIdsParam,
+  serializeIndicatorIdsParam,
+} from "./urlState";
 import type {
   BacktestResult,
   CandleRow,
@@ -162,12 +167,6 @@ function getElements(): Elements {
   };
 }
 
-function defaultIndicatorIds(): Set<string> {
-  return new Set(
-    INDICATORS.filter((indicator) => indicator.defaultEnabled).map((indicator) => indicator.id),
-  );
-}
-
 function parseInitialState(config: PageConfig): AppState {
   const params = new URL(window.location.href).searchParams;
   const requestedDatasetId = config.fixedDatasetId ?? params.get("dataset");
@@ -186,23 +185,13 @@ function parseInitialState(config: PageConfig): AppState {
     ? (requestedStrategyId as string)
     : "none";
 
-  const indicatorIds = params.get("ind")
-    ? new Set(
-        params
-          .get("ind")
-          ?.split(",")
-          .map((value) => value.trim())
-          .filter((value) => INDICATORS.some((indicator) => indicator.id === value)),
-      )
-    : defaultIndicatorIds();
-
   const requestedRange = params.get("range");
 
   return {
     datasetId,
     interval,
     strategyId,
-    activeIndicatorIds: indicatorIds.size ? indicatorIds : defaultIndicatorIds(),
+    activeIndicatorIds: parseIndicatorIdsParam(params.get("ind")),
     showVolume: params.get("volume") !== "0",
     priceScaleMode: params.get("scale") === "log"
       ? PriceScaleMode.Logarithmic
@@ -804,12 +793,7 @@ class WorkbenchApp {
     url.searchParams.set("strategy", this.state.strategyId);
     url.searchParams.set("range", this.state.rangePreset);
 
-    const indicatorIds = [...this.state.activeIndicatorIds];
-    if (indicatorIds.length) {
-      url.searchParams.set("ind", indicatorIds.join(","));
-    } else {
-      url.searchParams.delete("ind");
-    }
+    url.searchParams.set("ind", serializeIndicatorIdsParam(this.state.activeIndicatorIds));
 
     if (!this.state.showVolume) {
       url.searchParams.set("volume", "0");
