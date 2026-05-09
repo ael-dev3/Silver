@@ -140,7 +140,9 @@ function normalizeCoverage(
 }
 
 export class DataRepository {
-  constructor(private readonly fetcher: FetchLike = fetch) {}
+  constructor(
+    private readonly fetcher: FetchLike = (path, init) => globalThis.fetch(path, init),
+  ) {}
 
   private readonly overviewCache = new Map<string, Promise<DatasetOverview>>();
   private readonly datasetCache = new Map<string, Promise<LoadedDataset>>();

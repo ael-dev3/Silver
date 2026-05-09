@@ -3,6 +3,33 @@ import { DataRepository } from "./dataRepository";
 import type { DatasetDefinition, Interval } from "./types";
 
 describe("DataRepository", () => {
+  it("uses the default browser fetch with the global receiver intact", async () => {
+    let fetchReceiver: unknown = null;
+    const fetcher = vi.fn(function (
+      this: typeof globalThis,
+      path: RequestInfo | URL,
+      init?: RequestInit,
+    ) {
+      fetchReceiver = this;
+      expect(path).toBe("/silver_1h.csv");
+      expect(init).toEqual({ cache: "no-store" });
+      return Promise.resolve(response({ text: buildCsv("1h") }));
+    });
+
+    vi.stubGlobal("fetch", fetcher);
+
+    try {
+      const repository = new DataRepository();
+      const dataset = await repository.loadDataset(makeDefinition({ metadataPath: undefined }), "1h");
+
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect(fetchReceiver).toBe(globalThis);
+      expect(dataset.candles).toHaveLength(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("retries dataset loads after a transient CSV failure", async () => {
     let csvAttempts = 0;
     const repository = new DataRepository(async (path) => {

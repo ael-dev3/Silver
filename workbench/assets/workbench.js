@@ -7545,7 +7545,7 @@ var init_dataRepository = __esm({
     init_candleValidation();
     init_timestampValidation();
     DataRepository = class {
-      constructor(fetcher = fetch) {
+      constructor(fetcher = (path, init) => globalThis.fetch(path, init)) {
         this.fetcher = fetcher;
         this.overviewCache = /* @__PURE__ */ new Map();
         this.datasetCache = /* @__PURE__ */ new Map();
